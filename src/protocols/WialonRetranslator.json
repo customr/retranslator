@@ -1,0 +1,53 @@
+{	
+	"header" : {
+		"pack_size": "i", 	
+		"imei": 	 "15s", 
+		"time": 	 "i", 	
+		"flags": 	 "i"  
+	},
+
+	"blockheader" : {
+		"block_type":	"h",	
+		"block_size":	"i", 	
+		"reserved_attr":"b",	
+		"data_type": 	"b",	
+		"block_name":	"?s"
+	},
+
+	"blockheader_data" : {
+		"posinfo" : {
+			"block_type": 3003,
+			"block_size": 39,
+			"reserved_attr": 1,
+			"data_type": 2,
+			"block_name": "posinfo"
+		},
+
+		"ign": {
+			"block_type": 3003,
+			"block_size": 9,
+			"reserved_attr": 0,
+			"data_type": 3,
+			"block_name": "ign"
+		},
+
+		"sens": {
+			"block_type": 3003,
+			"block_size": 10,
+			"reserved_attr": 0,
+			"data_type": 3,
+			"block_name": "sens"
+		}
+	},
+
+	"blocks_format" : {
+		"posinfo":{
+			"lat": 		"d", 
+			"lon": 		"d", 
+			"alt": 		"d", 
+			"speed": 	"h", 
+			"direction":"h", 
+			"nsat": 	"b"
+		}
+	}
+}
