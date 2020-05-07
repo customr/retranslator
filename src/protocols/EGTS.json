@@ -1,0 +1,8 @@
+{	
+	"header" : {
+		"pack_size": "i", 	
+		"imei": 	 "15s", 
+		"time": 	 "i", 	
+		"flags": 	 "i"  
+	}
+}

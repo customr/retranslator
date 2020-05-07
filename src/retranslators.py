@@ -5,8 +5,9 @@ from src.core import Retranslator
 
 class WialonRetranslator(Retranslator):
 
+	SUCCESS_CODE = 17 #код, который принимает рентранслятор при успешном принятии пакета
 	FLAGS = 0x00000003 #битовая маска пакета (местоположение, цифр. входы)
-	DATATYPES = { #типы блока данных описанных в документации
+	DATATYPES = { #всевозможноые типы блока данных описанных в документации
 		1: 's',
 		2: 'b',
 		3: 'i',
@@ -28,9 +29,24 @@ class WialonRetranslator(Retranslator):
 	def add_x(self, name, **params):
 		self.check_header()
 		super().add_x(name, **params)
-		if not self.protocol["blocks_format"].get(name, None):
+		if not self.protocol["special_blocks"].get(name, None):
 			self.packet_format += self.DATATYPES[self.protocol["blockheader_data"][name]['data_type']]
 		
+
+	def send(self):
+		if self.server_answer: 
+			self.server_answer = None
+
+		super().send()
+		answer = int.from_bytes(self.server_answer, byteorder="big")
+		if answer==self.SUCCESS_CODE:
+			self.make_log("info", f"Сервер принял пакет (code={self.SUCCESS_CODE})")
+			return 0
+
+		else:
+			self.make_log("error", f"Сервер отверг пакет (code={answer})")
+			return -1
+
 
 	def check_header(self):
 		if not self.header_is_ready:
@@ -55,3 +71,19 @@ class WialonRetranslator(Retranslator):
 		self.packet_params[2] = self.FLAGS
 
 		self.make_log("info", "В 'header' внесены данные")
+
+
+class EGTS(Retranslator):
+	def __init__(self, ip, port):
+		"""EGTS протокол
+		https://www.swe-notes.ru/post/protocol-egts/
+
+		ip (str): ip адрес получателся
+		port (int): порт получаетеля
+		"""
+
+		super().__init__("EGTS", ip, port)
+
+
+	def authorization(self):
+		pass

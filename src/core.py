@@ -1,6 +1,8 @@
 import os
 import struct
 import socket
+import threading
+import binascii
 
 from time import time, sleep
 from json import load
@@ -26,6 +28,7 @@ class TCPConnection:
 		self.dst_port = dst_port
 		self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.connect(self.CONNECTION_ATTEMPTS)
+		self.server_answer = bytes()
 
 
 	def connect(self, attempts):
@@ -57,10 +60,18 @@ class TCPConnection:
 		bmsg (bytes): сообщение в байтах
 		"""
 		assert isinstance(bmsg, bytes), 'Пакет данных дожен быть в байтовом формате'
-
 		try:
+			msglen = len(bmsg)
+			totalsent = 0
+			while totalsent < msglen:
+				sent = self.socket.send(bmsg[totalsent:])
+				if sent==0:
+					raise RuntimeError()
+				totalsent += sent
+
 			self.socket.send(bmsg)
-			self.make_log("info", f'Пакет данных успешно отправлен (size {len(bmsg)} bytes)')
+			self.server_answer = self.socket.recv(8)
+			self.make_log("info", f'Пакет данных успешно отправлен (size {len(bmsg)} bytes)\n{binascii.hexlify(bmsg)}')
 			return 0
 
 		except Exception as e:
@@ -143,9 +154,9 @@ class Retranslator(TCPConnection):
 		blockheader_data = self.protocol["blockheader_data"][name].values()
 		self.packet_params.extend(blockheader_data)
 
-		if self.protocol["blocks_format"].get(name, None):
+		if self.protocol["special_blocks"].get(name, None):
 			#добавляем формат для данных
-			data_format = ''.join(self.protocol["blocks_format"][name].values())
+			data_format = ''.join(self.protocol["special_blocks"][name].values())
 			self.packet_format += data_format
 		
 		#и тут же их вставляем
@@ -162,9 +173,9 @@ class Retranslator(TCPConnection):
 		data (dict): исходные параметры
 		"""
 
-		if self.protocol["blocks_format"].get(name, None):
+		if self.protocol["special_blocks"].get(name, None):
 			ordered_data = []
-			for key in self.protocol["blocks_format"][name].keys():
+			for key in self.protocol["special_blocks"][name].keys():
 				ordered_data.append(data[key])
 
 			return ordered_data
