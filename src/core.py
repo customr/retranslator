@@ -1,14 +1,15 @@
 import os
 import struct
 import socket
-import threading
-import binascii
 
+from binascii import hexlify
 from time import time, sleep
 from json import load
 
 from src.log_config import logger
 
+
+#TODO: little-endian for double
 
 class TCPConnection:
 
@@ -68,10 +69,7 @@ class TCPConnection:
 				if sent==0:
 					raise RuntimeError()
 				totalsent += sent
-
-			self.socket.send(bmsg)
-			self.server_answer = self.socket.recv(8)
-			self.make_log("info", f'Пакет данных успешно отправлен (size {len(bmsg)} bytes)\n{binascii.hexlify(bmsg)}')
+			self.make_log("info", f'Пакет данных успешно отправлен (size {msglen} bytes)\n{hexlify(bmsg)}')
 			return 0
 
 		except Exception as e:
@@ -98,7 +96,7 @@ class TCPConnection:
 
 class Retranslator(TCPConnection):
 
-	PROTOCOLS_DIR = "src/protocols/" #место где лежат json'ы с описанием протокола
+	PROTOCOLS_DIR = "src/protocols/" #место где лежат json'ы с описанием протоколов
 
 	def __init__(self, protocol_name:str, ip:str, port:int):
 		"""Родитель всех протоколов
@@ -186,13 +184,37 @@ class Retranslator(TCPConnection):
 
 	def send(self):
 		self.packet_format, self.packet_params = self.handler(self.packet_format, self.packet_params)
-		self.packet += struct.pack(">"+self.packet_format, *self.packet_params)
+		self.packet += self.pack(self.packet_format, self.packet_params)
 		self.make_log("info", "Пакет с данными готов к отправке")
 		super().send(self.packet)
 
 
 	@staticmethod
-	def handler(fmt:str, params):
+	def pack(fmt:str, params:list):
+		#TODO: добавить unsigned double и long
+
+		known_double = []
+		for n, param in enumerate(params):
+			if isinstance(param, float):
+				known_double.append(param)
+
+		packet = bytes()
+		for i in range(fmt.count('d')):
+			ind = fmt.index("d")
+			left, right = fmt[:ind], fmt[ind+1:]
+			end = params.index(known_double[i])
+			packet += struct.pack(">"+left, *params[:end])
+			packet += struct.pack("<d", known_double[i])
+			
+			fmt = right[::]
+			params = params[end+1:]
+		
+		packet += struct.pack(">"+fmt, *params)
+		return packet
+
+
+	@staticmethod
+	def handler(fmt:str, params:list):
 		"""
 		в struct.pack есть небольшая недоработка:
 		нельзя указать неизвестное количество символов в строке,
@@ -216,7 +238,7 @@ class Retranslator(TCPConnection):
 		while fmt.find('?')!=-1:
 			xlen = fmt.find('?')
 			left, right = fmt[:xlen], fmt[xlen+1:]
-			fmt = left + str(len(known_str[fmt.count("s",0,xlen)])) + right
+			fmt = left + str(len(known_str[fmt.count("s",0,xlen)-1])) + right
 
 		return fmt, params
 

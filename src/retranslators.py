@@ -6,7 +6,7 @@ from src.core import Retranslator
 class WialonRetranslator(Retranslator):
 
 	SUCCESS_CODE = 17 #код, который принимает рентранслятор при успешном принятии пакета
-	FLAGS = 0x00000003 #битовая маска пакета (местоположение, цифр. входы)
+	FLAGS = 3 #битовая маска пакета (местоположение, цифр. входы)
 	DATATYPES = { #всевозможноые типы блока данных описанных в документации
 		1: 's',
 		2: 'b',
@@ -30,7 +30,8 @@ class WialonRetranslator(Retranslator):
 		self.check_header()
 		super().add_x(name, **params)
 		if not self.protocol["special_blocks"].get(name, None):
-			self.packet_format += self.DATATYPES[self.protocol["blockheader_data"][name]['data_type']]
+			datatype = self.DATATYPES[self.protocol["blockheader_data"][name]['data_type']]
+			self.packet_format += datatype
 		
 
 	def send(self):
@@ -59,11 +60,14 @@ class WialonRetranslator(Retranslator):
 	def fill_header(self, imei, time):
 		assert self.header_is_ready, "Header еще не был создан!"
 
+		self.packet_format, self.packet_params = Retranslator.handler(self.packet_format, self.packet_params)
+		
 		#исключение в протоколе: little endian
-		packet_size = struct.calcsize(self.packet_format[1:])
-		packet_size = struct.pack("<i", packet_size)
 		self.packet_params = self.packet_params[1:]
 		self.packet_format = self.packet_format[1:]
+		packet_size = struct.calcsize(self.packet_format)-14
+		packet_size = struct.pack("<i", packet_size)
+
 		self.packet += packet_size 
 
 		self.packet_params[0] = imei

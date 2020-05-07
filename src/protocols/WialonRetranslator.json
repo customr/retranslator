@@ -1,7 +1,7 @@
 {	
 	"header" : {
 		"pack_size": "i", 	
-		"imei": 	 "15s", 
+		"imei": 	 "15sx", 
 		"time": 	 "i", 	
 		"flags": 	 "i"  
 	},
@@ -11,32 +11,48 @@
 		"block_size":	"i", 	
 		"reserved_attr":"b",	
 		"data_type": 	"b",	
-		"block_name":	"?s"
+		"block_name":	"?sx"
 	},
 
 	"blockheader_data" : {
+		"avl_inputs":{
+			"block_type": 	3003,
+			"block_size": 	16,
+			"reserved_attr":1,
+			"data_type": 	3,
+			"block_name": 	"avl_inputs"
+		},
+
 		"posinfo" : {
-			"block_type": 3003,
-			"block_size": 39,
-			"reserved_attr": 1,
-			"data_type": 2,
-			"block_name": "posinfo"
+			"block_type": 	3003,
+			"block_size": 	39,
+			"reserved_attr":1,
+			"data_type": 	2,
+			"block_name": 	"posinfo"
 		},
 
 		"ign": {
-			"block_type": 3003,
-			"block_size": 9,
-			"reserved_attr": 0,
-			"data_type": 3,
-			"block_name": "ign"
+			"block_type": 	3003,
+			"block_size": 	10,
+			"reserved_attr":0,
+			"data_type": 	3,
+			"block_name": 	"ign"
 		},
 
 		"sens": {
-			"block_type": 3003,
-			"block_size": 10,
-			"reserved_attr": 0,
-			"data_type": 3,
-			"block_name": "sens"
+			"block_type": 	3003,
+			"block_size": 	11,
+			"reserved_attr":0,
+			"data_type": 	3,
+			"block_name": 	"sens"
+		},
+
+		"temp": {
+			"block_type": 	3003,
+			"block_size": 	11,
+			"reserved_attr":0,
+			"data_type": 	3,
+			"block_name": 	"temp"
 		}
 	},
 
