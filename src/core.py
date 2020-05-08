@@ -173,8 +173,15 @@ class Retranslator(TCPConnection):
 
 		if self.protocol["special_blocks"].get(name, None):
 			ordered_data = []
-			for key in self.protocol["special_blocks"][name].keys():
-				ordered_data.append(data[key])
+			for key, fmt in self.protocol["special_blocks"][name].items():
+				if fmt in 'hHiIqQnN':
+					ordered_data.append(data.get(key, 0))
+				elif fmt in 'efd':
+					ordered_data.append(data.get(key, 0.0))
+				elif fmt in 'cbBsp':
+					ordered_data.append(data.get(key, ''))
+				else:
+					raise ValueError("Unknown data format")
 
 			return ordered_data
 
@@ -184,32 +191,40 @@ class Retranslator(TCPConnection):
 
 	def send(self):
 		self.packet_format, self.packet_params = self.handler(self.packet_format, self.packet_params)
-		self.packet += self.pack(self.packet_format, self.packet_params)
+		self.packet += self.pack_data(self.packet_format, self.packet_params)
 		self.make_log("info", "Пакет с данными готов к отправке")
 		super().send(self.packet)
+		self.reset()
+
+
+	def reset(self):
+		self.header_is_ready = False
+		self.packet = bytes()
+		self.packet_format = ""
+		self.packet_params = []
 
 
 	@staticmethod
-	def pack(fmt:str, params:list):
-		#TODO: добавить unsigned double и long
-
-		known_double = []
-		for n, param in enumerate(params):
-			if isinstance(param, float):
-				known_double.append(param)
-
+	def pack_data(fmt:str, params:list):
 		packet = bytes()
-		for i in range(fmt.count('d')):
-			ind = fmt.index("d")
-			left, right = fmt[:ind], fmt[ind+1:]
-			end = params.index(known_double[i])
-			packet += struct.pack(">"+left, *params[:end])
-			packet += struct.pack("<d", known_double[i])
-			
-			fmt = right[::]
-			params = params[end+1:]
-		
-		packet += struct.pack(">"+fmt, *params)
+		doubles = []
+		f_parts = fmt.split("d")
+		p_parts = []
+
+		for param in params:
+			if isinstance(param, float):
+				doubles.append(param)
+
+		for n, part in enumerate(f_parts[:-1]):
+			ind = params.index(doubles[n])
+
+			packet += struct.pack(">"+part, *params[:ind])
+			packet += struct.pack("<d", doubles[n])
+
+			del(params[:ind+1])
+
+		packet += struct.pack(">"+f_parts[-1], *params)
+
 		return packet
 
 
@@ -226,8 +241,6 @@ class Retranslator(TCPConnection):
 		params (list): параметры 
 		"""
 
-		#для удобства можем str переформатировать в bytes obj
-
 		known_str = []
 		for n, param in enumerate(params):
 			if isinstance(param, str):
@@ -236,9 +249,9 @@ class Retranslator(TCPConnection):
 
 		#знак вопроса заменяем длиной строки
 		while fmt.find('?')!=-1:
-			xlen = fmt.find('?')
+			xlen = fmt.rfind('?')
 			left, right = fmt[:xlen], fmt[xlen+1:]
-			fmt = left + str(len(known_str[fmt.count("s",0,xlen)-1])) + right
+			fmt = left + str(len(known_str.pop())) + right
 
 		return fmt, params
 

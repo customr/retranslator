@@ -63,7 +63,7 @@
 			"alt": 		"d", 
 			"speed": 	"h", 
 			"direction":"h", 
-			"nsat": 	"b"
+			"sat_num": 	"b"
 		}
 	}
 }

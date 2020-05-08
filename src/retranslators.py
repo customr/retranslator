@@ -1,4 +1,5 @@
 import struct
+import time
 
 from src.core import Retranslator
 
@@ -14,6 +15,7 @@ class WialonRetranslator(Retranslator):
 		4: 'd',
 		5: 'l'
 	}
+	DATE_FORMAT = "%Y-%m-%d %H:%M:%S" #формат даты
 
 	def __init__(self, ip, port):
 		"""WialonRetranslator протокол
@@ -57,8 +59,14 @@ class WialonRetranslator(Retranslator):
 			self.header_is_ready = True
 
 
-	def fill_header(self, imei, time):
+	def fill_header(self, imei, tm):
 		assert self.header_is_ready, "Header еще не был создан!"
+
+		if not isinstance(imei, str):
+			imei = str(imei)
+
+		if not isinstance(tm, int):
+			tm = int(time.mktime(time.strptime(tm, self.DATE_FORMAT)))
 
 		self.packet_format, self.packet_params = Retranslator.handler(self.packet_format, self.packet_params)
 		
@@ -71,7 +79,7 @@ class WialonRetranslator(Retranslator):
 		self.packet += packet_size 
 
 		self.packet_params[0] = imei
-		self.packet_params[1] = time
+		self.packet_params[1] = tm
 		self.packet_params[2] = self.FLAGS
 
 		self.make_log("info", "В 'header' внесены данные")
