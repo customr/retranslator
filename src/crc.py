@@ -1,12 +1,10 @@
-import struct
-
 def crc8(data, offset=0, length=0):
     crc = 0xFF
     if length==0:
         length = len(data)
 
-    for i in range(length):
-        crc = crc8_table[crc ^ data[i+offset]]
+    for i in range(offset, length+offset):
+        crc = crc8_table[crc ^ data[i]]
 
     return crc
 
@@ -16,8 +14,8 @@ def crc16(data, offset=0, length=0):
     if length==0: 
         length = len(data)
 
-    for i in range(length):
-        crc ^= data[offset + i] << 8
+    for i in range(offset, length+offset):
+        crc ^= data[i] << 8
         for j in range(8):
             if (crc & 0x8000) > 0:
                 crc =(crc << 1) ^ 0x1021

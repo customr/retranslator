@@ -137,6 +137,7 @@ class Retranslator(TCPConnection):
 
 
 	def send(self, endiannes='>'):
+		self.make_log("info", f"Началась отправка пакета данных")
 		res = super().send(self.packet)
 		self.reset()
 		return res
@@ -148,26 +149,36 @@ class Retranslator(TCPConnection):
 
 
 	@staticmethod
+	def processing(fmt:dict, params:dict, endiannes=">"):
+		params = Retranslator.in_correct_order(fmt, params)
+		fmt, params = Retranslator.handler(''.join(fmt.values()), params)
+		block = Retranslator.pack_data(fmt, params, endiannes)
+		return block
+
+
+	@staticmethod
 	def in_correct_order(data_format, data):
 		"""
 		Сортирует параметры в нужном порядке.
 		На вход получаем словарь, на выход массив
 
-		name (str): имя в json в blocks_format
+		data_format (dict): словарь с именами параметров и их типом данных
 		data (dict): исходные параметры
 		"""
 
 		ordered_data = []
 		for key, fmt in data_format.items():
-			fmt = ''.join([i for i in fmt if not i.isdigit()])
+			fmt = ''.join([i for i in fmt if not i.isdigit() and not i in 'x?'])
 			if fmt in 'hHiIqQnN':
 				ordered_data.append(data.get(key, 0))
 			elif fmt in 'efd':
 				ordered_data.append(data.get(key, 0.0))
 			elif fmt in 'cbBsp':
 				ordered_data.append(data.get(key, b''))
+			elif fmt=='?':
+				ordered_data.append(data.get(key, False))
 			else:
-				self.make_log("critical", f"Ошибка в типе данных '{key} : {fmt}'")
+				print(f"Ошибка в типе данных '{key} : {fmt}'")
 				raise ValueError("Unknown datatype")
 
 		return ordered_data
@@ -205,7 +216,7 @@ class Retranslator(TCPConnection):
 		else:
 			try:
 				packet += struct.pack(endiannes+fmt, *params)
-				
+
 			except Exception as e:
 				self.make_log("critical", f'Ошибка в запаковке данных {fmt} - {params} ({e})')
 

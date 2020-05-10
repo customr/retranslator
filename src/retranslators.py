@@ -25,91 +25,51 @@ class WialonRetranslator(Retranslator):
 		"""
 
 		super().__init__("WialonRetranslator", ip, port)
-		self.packet_format = ""
-		self.packet_params = []
-		self.header_is_ready = False
 
 
-	def add_x(self, name, **params):
+	def add_block(self, name, **params):
 		"""
 		Добавляет часть пакета описанную в json
 
 		name (str): имя блока (в blocks_format и blockheader_data)
 		params (kwargs): параметры в соотвествии с выбранным блоком 
 		"""
+		block = bytes()
 
-		self.check_header()
+		if not name=='header':
+			fmt = self.protocol["FORMATS"]['blockheader']
+			data = self.protocol["PARAMS"]["blockheader"][name]
+			block += Retranslator.processing(fmt, data)
 
-		#добавляем формат описания блока
-		blockheader_format = ''.join(self.protocol["blockheader"].values())
-		self.packet_format += blockheader_format
+		fmt = self.protocol["FORMATS"].get(name, '')
+		if fmt:
+			block += Retranslator.processing(fmt, params)
 
-		#тут же вставляем эти параметры
-		blockheader_data = self.protocol["blockheader_data"][name].values()
-		self.packet_params.extend(blockheader_data)
-
-		#добавляем формат для данных
-		if self.protocol["special_blocks"].get(name, None):
-			data_format = ''.join(self.protocol["special_blocks"][name].values())
-			self.packet_format += data_format
-			data = self.in_correct_order(self.protocol["special_blocks"].get(name, None), params)
-		
 		else:
-			datatype = self.DATATYPES[self.protocol["blockheader_data"][name]['data_type']]
-			self.packet_format += datatype
-			data = params.values()
+			datatype = data.get('data_type', None)
+			if datatype:
+				datatype = self.DATATYPES[datatype]
+				block += Retranslator.pack_data(datatype, params.values())
 
-		self.packet_params.extend(data)
-		self.make_log("info", f"Добавлен блок '{name}'")
-			
+		self.packet += block
+		self.make_log("info", f"Добавлен блок '{name}' в пакет данных")
+
 
 	def send(self):
-		self.packet_format, self.packet_params = Retranslator.handler(self.packet_format, self.packet_params)
-		self.packet += Retranslator.pack_data(self.packet_format, self.packet_params, ">")
-		self.make_log("info", "Пакет данных готов к отправке")
+		assert len(self.packet)>0
 
+		packet_size = len(self.packet)
+		packet_size = struct.pack("<I", packet_size)
+		self.packet = packet_size + self.packet
 		super().send()
 
 
-	def check_header(self):
-		if not self.header_is_ready:
-			self.packet_format += ''.join(self.protocol['header'].values())
-			self.packet_params.extend([None, None, None, None])
-			self.make_log("info", "Добавлен пустой блок 'header' в пакет данных")
-			self.header_is_ready = True
-
-
-	def fill_header(self, imei, tm):
-		assert self.header_is_ready, "Header еще не был создан!"
-
-		if not isinstance(imei, str):
-			imei = str(imei)
-
-		if not isinstance(tm, int):
-			tm = int(time.mktime(time.strptime(tm, self.DATE_FORMAT)))
-
-		self.packet_format, self.packet_params = Retranslator.handler(self.packet_format, self.packet_params)
-		
-		#исключение в протоколе: little endian
-		self.packet_params = self.packet_params[1:]
-		self.packet_format = self.packet_format[1:]
-		packet_size = struct.calcsize(self.packet_format)-14
-		packet_size = struct.pack("<i", packet_size)
-
-		self.packet += packet_size 
-
-		self.packet_params[0] = imei
-		self.packet_params[1] = tm
-		self.packet_params[2] = self.FLAGS
-
-		self.make_log("info", "В 'header' внесены данные")
-
-
-	def reset(self):
-		self.packet_format = ''
-		self.packet_params = []
-		self.header_is_ready = False
-		super().reset()
+	@staticmethod
+	def get_timestamp(t):
+		if isinstance(t, str):
+			return int(time.mktime(time.strptime(t, self.DATE_FORMAT)))
+		else:
+			raise ValueError("Неизвестный формат времени")
 
 
 class EGTS(Retranslator):
@@ -129,7 +89,7 @@ class EGTS(Retranslator):
 	def add_template(self, action, **data):
 		assert action in self.protocol.keys(), 'Неизвестное имя добавляемого шаблона'
 
-		def paste(params, data):
+		def paste_data(params, data):
 			for n in params.keys():
 				if isinstance(params[n], str):
 					if "*"==params[n][0]:
@@ -148,13 +108,8 @@ class EGTS(Retranslator):
 		packet = bytes()
 		for name, params in self.protocol[action].items():
 			fmt = self.protocol["FORMATS"][name]
-			params = paste(params, data)
-			params = self.in_correct_order(fmt, params)
-
-			fmt = ''.join(fmt.values())
-
-			fmt, params = Retranslator.handler(fmt, params)
-			block = Retranslator.pack_data(fmt, params, '=')
+			params = paste_data(params, data)
+			block = Retranslator.processing(fmt, params, '=')
 
 			if name=="EGTS_PACKET_HEADER":
 				control_sum = crc8(block)
@@ -164,7 +119,7 @@ class EGTS(Retranslator):
 			packet += block
 			self.make_log("info", f"[{action}] Добавлен блок '{name}' (size {len(block)} bytes")
 
-		control_sum = crc16(packet, 10)
+		control_sum = crc16(packet, 11, len(packet)-11)
 		control_sum = struct.pack("<H", control_sum)
 		self.make_log("info", f"[{action}] Добавлена контрольная сумма записи (size {len(control_sum)} bytes)")
 		self.packet += packet + control_sum

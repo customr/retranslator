@@ -29,10 +29,10 @@ records = [
 
 # for record in records:
 # 	posinfo = {key:record[key] for key in ['lon', 'lat', 'speed', 'direction', 'sat_num']}
-# 	RETRANSLATORS[0].add_x("posinfo", **posinfo)
-# 	RETRANSLATORS[0].add_x("ign", ign=record["ign"])
-# 	RETRANSLATORS[0].add_x('sens', sens=record["sens"])
-# 	RETRANSLATORS[0].fill_header(record["imei"], int(time.time()))
+# 	RETRANSLATORS[0].add_block("header", imei=str(record["imei"]), tm=int(time.time()))
+# 	RETRANSLATORS[0].add_block("posinfo", **posinfo)
+# 	RETRANSLATORS[0].add_block("ign", ign=record["ign"])
+# 	RETRANSLATORS[0].add_block('sens', sens=record["sens"])
 # 	RETRANSLATORS[0].send()
 # 	time.sleep(2)
 
