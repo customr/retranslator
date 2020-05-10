@@ -1,8 +1,146 @@
 {	
-	"header" : {
-		"pack_size": "i", 	
-		"imei": 	 "15s", 
-		"time": 	 "i", 	
-		"flags": 	 "i"  
+	"FORMATS": {
+		"EGTS_PACKET_HEADER": {
+			"protocol_version": "b",
+			"security_key_id": 	"b",
+			"flags": 			"b",
+			"header_length": 	"b",
+			"header_encoding": 	"b",
+			"frame_data_length":"H",
+			"pid": 				"H",
+			"packet_type": 		"b"
+		},
+
+		"EGTS_RECORD_HEADER": {
+			"record_length":	  	 "H",
+			"record_number": 	  	 "H",
+			"record_flags": 	  	 "B",
+			"oid": 			  	 	 "I",
+			"sourse_service_type":	 "b",
+			"recipient_service_type":"b"
+		},
+
+		"EGTS_SUBRECORD_HEADER": {
+			"type":  "b",
+			"length":"H"
+		},
+
+		"EGTS_SR_TERM_IDENTITY_RECORD": {
+			"tid":   "I",
+			"flags": "B",
+			"imei":  "15s",
+			"buf": 	 "H"
+		},
+
+		"EGTS_SR_POS_DATA_RECORD": {
+			"egts_time": 	"I",
+			"lat": 			"I",
+			"lon": 			"I",
+			"flags": 		"B",
+			"speed": 		"H",
+			"dir": 			"B",
+			"odm1": 		"h",
+			"odm2": 		"?",
+			"din": 			"B",
+			"src": 			"B"
+		},
+
+		"EGTS_SR_EXT_POS_DATA_RECORD": {
+			"flags": 	"B",
+			"HDOP": 	"H",
+			"sat_num": 	"B"
+		}
+	},
+
+
+
+
+
+
+
+
+	"authentication": {
+		"EGTS_PACKET_HEADER": {
+			"protocol_version": 1,
+			"security_key_id": 	0,
+			"flags": 			0,
+			"header_length": 	11,
+			"header_encoding": 	0,
+			"frame_data_length":36,
+			"pid": 				1,
+			"packet_type": 		1
+		},
+
+		"EGTS_RECORD_HEADER": {
+			"record_length":	  	 25,
+			"record_number": 	  	 1,
+			"record_flags": 	  	 129,
+			"oid": 			  	 	 50,
+			"sourse_service_type":	 1,
+			"recipient_service_type":1
+		},
+
+		"EGTS_SUBRECORD_HEADER": {
+			"type":  1,
+			"length":22
+		},
+
+		"EGTS_SR_TERM_IDENTITY_RECORD": {
+			"tid":   50,
+			"flags": 66,
+			"imei":  "*imei",
+			"buf": 	 256
+		}
+	},
+
+	"pos_data": {
+		"EGTS_PACKET_HEADER": {
+			"protocol_version": 1,
+			"security_key_id": 	0,
+			"flags": 			0,
+			"header_length": 	11,
+			"header_encoding": 	0,
+			"frame_data_length":47,
+			"pid": 				"*pid",
+			"packet_type": 		1
+		},
+
+		"EGTS_RECORD_HEADER": {
+			"record_length":	  	 36,
+			"record_number": 	  	 "*rid",
+			"record_flags": 	  	 129,
+			"oid": 			  	 	 50,
+			"sourse_service_type":	 2,
+			"recipient_service_type":2
+		},
+
+		"EGTS_SUBRECORD_HEADER": {
+			"type":  16,
+			"length":26
+		},
+
+		"EGTS_SR_POS_DATA_RECORD": {
+			"egts_time": 	"*egts_time",
+			"lat": 			"*lat",
+			"lon": 			"*lon",
+			"flags": 		"*flags",
+			"speed": 		"*speed",
+			"dir": 			"*dir",
+			"odm1": 		0,
+			"odm2": 		0,
+			"din": 			0,
+			"src": 			0
+		},
+
+		"EGTS_SUBRECORD_HEADER": {
+			"type":  17,
+			"length":4
+		},
+
+		"EGTS_SR_EXT_POS_DATA_RECORD": {
+			"flags": 	10,
+			"HDOP":		0,
+			"sat_num": 	"*sat_num"
+		}
 	}
 }

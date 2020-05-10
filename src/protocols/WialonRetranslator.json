@@ -58,8 +58,8 @@
 
 	"special_blocks" : {
 		"posinfo":{
-			"lat": 		"d", 
 			"lon": 		"d", 
+			"lat": 		"d", 
 			"alt": 		"d", 
 			"speed": 	"h", 
 			"direction":"h", 

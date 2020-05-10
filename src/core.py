@@ -9,12 +9,10 @@ from json import load
 from src.log_config import logger
 
 
-#TODO: little-endian for double
-
 class TCPConnection:
 
-	CONNECTION_ATTEMPTS = 5 #количество попыток соединиться с сервером
-	ATTEMPT_DELAY = 5 #пауза между попытками в секундах
+	CONNECTION_ATTEMPTS = 50 #количество попыток соединиться с сервером
+	ATTEMPT_DELAY =  10 #начальное кол-во секунд паузы (далее - лог. рост)
 
 	def __init__(self, dst_ip:str, dst_port:int):
 		"""Обеспечивает общение по TCP протоколу
@@ -45,14 +43,15 @@ class TCPConnection:
 				self.make_log("info", 'Соединение установлено')
 
 			except Exception as e:
-				self.make_log("error", f'Не удалось установить соединение ({e})')
-				sleep(self.ATTEMPT_DELAY)
+				self.make_log("error", f'Не удалось установить соединение. Попытка №{self.CONNECTION_ATTEMPTS-attempts} ({e})')
+				sleeptime = self.ATTEMPT_DELAY*((self.CONNECTION_ATTEMPTS-attempts)**(self.ATTEMPT_DELAY/2))
+				sleep(sleeptime)
 				self.connect(attempts-1)
 
 		else:
 			self.make_log("critical", 'Невозможно установить соединение')
 			self.socket.close()
-			raise RuntimeError()
+			raise RuntimeError('Невозможно установить соединение')
 
 
 	def send(self, bmsg):
@@ -69,7 +68,9 @@ class TCPConnection:
 				if sent==0:
 					raise RuntimeError()
 				totalsent += sent
+
 			self.make_log("info", f'Пакет данных успешно отправлен (size {msglen} bytes)\n{hexlify(bmsg)}')
+			self.server_answer = self.socket.recv(1024)
 			return 0
 
 		except Exception as e:
@@ -81,10 +82,13 @@ class TCPConnection:
 		if lvl=='info':
 			logger.info(f"[{self.dst_ip}:{self.dst_port}] "+msg)
 		elif lvl=='critical':
+			print(msg)
 			logger.critical(f"[{self.dst_ip}:{self.dst_port}] "+msg)
 		elif lvl=='error':
+			print(msg)
 			logger.error(f"[{self.dst_ip}:{self.dst_port}] "+msg)
 		elif lvl=='warning':
+			print(msg)
 			logger.warning(f"[{self.dst_ip}:{self.dst_port}] "+msg)
 
 
@@ -97,6 +101,7 @@ class TCPConnection:
 class Retranslator(TCPConnection):
 
 	PROTOCOLS_DIR = "src/protocols/" #место где лежат json'ы с описанием протоколов
+	DATE_FORMAT = "%Y-%m-%d %H:%M:%S" #формат даты
 
 	def __init__(self, protocol_name:str, ip:str, port:int):
 		"""Родитель всех протоколов
@@ -117,13 +122,10 @@ class Retranslator(TCPConnection):
 		self.ip = ip
 		self.port = port
 		self.protocol_name = protocol_name
-		self.header_is_ready = False
 		self.packet = bytes()
-		self.packet_format = ""
-		self.packet_params = []
 
 		self.get_protocol()
-		self.make_log("info", "Протокол инициализирован")
+		self.make_log("info", f"Протокол {protocol_name} инициализирован")
 
 
 	def get_protocol(self):
@@ -134,35 +136,19 @@ class Retranslator(TCPConnection):
 			self.protocol = load(s)
 
 
-	def add_x(self, name, **params):
-		"""
-		Добавляет часть пакета описанную в json
-
-		name (str): имя блока (в blocks_format и blockheader_data)
-		params (kwargs): параметры в соотвествии с выбранным блоком 
-		"""
-		
-		data = self.in_correct_order(name, params) #тасуем параметры в порядке, указанном в протоколе
-
-		#добавляем формат описания блока
-		blockheader_format = ''.join(self.protocol["blockheader"].values())
-		self.packet_format += blockheader_format
-
-		#тут же вставляем эти параметры
-		blockheader_data = self.protocol["blockheader_data"][name].values()
-		self.packet_params.extend(blockheader_data)
-
-		if self.protocol["special_blocks"].get(name, None):
-			#добавляем формат для данных
-			data_format = ''.join(self.protocol["special_blocks"][name].values())
-			self.packet_format += data_format
-		
-		#и тут же их вставляем
-		self.packet_params.extend(data)
-		self.make_log("info", f"Добавлен блок '{name}'")
+	def send(self, endiannes='>'):
+		res = super().send(self.packet)
+		self.reset()
+		return res
 
 
-	def in_correct_order(self, name, data):
+	def reset(self):
+		self.packet = bytes()
+		self.make_log("info", "Ретранслятор очищен от данных")
+
+
+	@staticmethod
+	def in_correct_order(data_format, data):
 		"""
 		Сортирует параметры в нужном порядке.
 		На вход получаем словарь, на выход массив
@@ -171,59 +157,57 @@ class Retranslator(TCPConnection):
 		data (dict): исходные параметры
 		"""
 
-		if self.protocol["special_blocks"].get(name, None):
-			ordered_data = []
-			for key, fmt in self.protocol["special_blocks"][name].items():
-				if fmt in 'hHiIqQnN':
-					ordered_data.append(data.get(key, 0))
-				elif fmt in 'efd':
-					ordered_data.append(data.get(key, 0.0))
-				elif fmt in 'cbBsp':
-					ordered_data.append(data.get(key, ''))
-				else:
-					raise ValueError("Unknown data format")
+		ordered_data = []
+		for key, fmt in data_format.items():
+			fmt = ''.join([i for i in fmt if not i.isdigit()])
+			if fmt in 'hHiIqQnN':
+				ordered_data.append(data.get(key, 0))
+			elif fmt in 'efd':
+				ordered_data.append(data.get(key, 0.0))
+			elif fmt in 'cbBsp':
+				ordered_data.append(data.get(key, b''))
+			else:
+				self.make_log("critical", f"Ошибка в типе данных '{key} : {fmt}'")
+				raise ValueError("Unknown datatype")
 
-			return ordered_data
-
-		else:
-			return data.values()
-
-
-	def send(self):
-		self.packet_format, self.packet_params = self.handler(self.packet_format, self.packet_params)
-		self.packet += self.pack_data(self.packet_format, self.packet_params)
-		self.make_log("info", "Пакет с данными готов к отправке")
-		super().send(self.packet)
-		self.reset()
-
-
-	def reset(self):
-		self.header_is_ready = False
-		self.packet = bytes()
-		self.packet_format = ""
-		self.packet_params = []
+		return ordered_data
 
 
 	@staticmethod
-	def pack_data(fmt:str, params:list):
+	def pack_data(fmt:str, params:list, endiannes=">"):
+		""" Запаковщик данных
+
+		fmt (str): формат всего пакета (struct)
+		params (list): все параметры пакета
+		endiannes (list): byte-order (по умолчанию big-endian)
+		"""
+
 		packet = bytes()
-		doubles = []
-		f_parts = fmt.split("d")
-		p_parts = []
 
-		for param in params:
-			if isinstance(param, float):
-				doubles.append(param)
+		if ('d' in fmt) or ('D' in fmt):
+			doubles = []
+			f_parts = fmt.split("d")
 
-		for n, part in enumerate(f_parts[:-1]):
-			ind = params.index(doubles[n])
+			for param in params:
+				if isinstance(param, float):
+					doubles.append(param)
 
-			packet += struct.pack(">"+part, *params[:ind])
-			packet += struct.pack("<d", doubles[n])
+			for n, part in enumerate(f_parts[:-1]):
+				ind = params.index(doubles[n])
 
-			del(params[:ind+1])
+				packet += struct.pack(endiannes+part, *params[:ind])
+				packet += struct.pack("<d", doubles[n])
 
-		packet += struct.pack(">"+f_parts[-1], *params)
+				del(params[:ind+1])
+
+			packet += struct.pack(endiannes+f_parts[-1], *params)
+
+		else:
+			try:
+				packet += struct.pack(endiannes+fmt, *params)
+				
+			except Exception as e:
+				self.make_log("critical", f'Ошибка в запаковке данных {fmt} - {params} ({e})')
 
 		return packet
 
@@ -242,9 +226,9 @@ class Retranslator(TCPConnection):
 		"""
 
 		known_str = []
-		for n, param in enumerate(params):
-			if isinstance(param, str):
-				params[n] = bytes(param.encode('utf-8'))
+		for n in range(len(params)):
+			if isinstance(params[n], str):
+				params[n] = bytes(params[n].encode('utf-8'))
 				known_str.append(params[n])
 
 		#знак вопроса заменяем длиной строки
