@@ -88,14 +88,13 @@ class TCPConnection:
 	def make_log(self, lvl:str, msg:str):
 		if lvl=='info':
 			logger.info(msg + f"\n[{self.dst_ip}:{self.dst_port}] ")
+		elif lvl=='debug':
+			logger.debug(msg + f"\n[{self.dst_ip}:{self.dst_port}] ")
 		elif lvl=='critical':
-			print(msg)
 			logger.critical(msg + f"\n[{self.dst_ip}:{self.dst_port}] ")
 		elif lvl=='error':
-			print(msg)
 			logger.error(msg + f"\n[{self.dst_ip}:{self.dst_port}] ")
 		elif lvl=='warning':
-			print(msg)
 			logger.warning(msg + f"\n[{self.dst_ip}:{self.dst_port}] ")
 
 
@@ -152,32 +151,15 @@ class Retranslator(TCPConnection):
 
 	def reset(self):
 		self.packet = bytes()
-		self.make_log("info", "Ретранслятор очищен от данных")
-
-
-	def __str__(self):
-		return f"{self.protocol_name} [{self.ip}:{self.port}]"
-
-
-	@staticmethod
-	def processing(fmt:dict, params:dict, endiannes=">"):
-		"""Обработчик
-		
-		Расставляет параметры в нужном порядке
-		Преобразует формат и параметры, вставляя нужные данные
-		Пакует данные в байты
-
-		fmt (dict): в виде param_name:struct_fmt
-		params (dict): в виде param_name:value
-		endiannes (str): byte-order
-		"""
-		params = Retranslator.in_correct_order(fmt, params)
-		fmt, params = Retranslator.handler(''.join(fmt.values()), params)
-		block = Retranslator.pack_data(fmt, params, endiannes)
-		return block
+		self.make_log("debug", "Ретранслятор очищен от данных")
 
 
 	def paste_data_into_params(self, params, data, formats):
+		def find_format(name):
+			for key, item in self.protocol["FORMATS"].items():
+				if name in item.keys():
+					return item[name]
+
 		for n in params.keys():
 			if isinstance(params[n], str):
 				slc = ('[' in params[n])
@@ -189,11 +171,15 @@ class Retranslator(TCPConnection):
 						params[n], slc = params[n].split("[")
 						slc = slc[:-1]
 
-						if formats[n]!=formats[params[n]]:
+						if find_format(n)!=find_format(params[n]):
 							other_format = True
 
 					if params[n] in data.keys():
 						params[n] = data[params[n]]
+
+					elif params[n] in self.data.keys():
+						params[n] = self.data[params[n]]
+						
 					else:
 						try:
 							params[n] = getattr(self, params[n])
@@ -232,6 +218,25 @@ class Retranslator(TCPConnection):
 				continue
 
 		return params
+
+
+	@staticmethod
+	def processing(fmt:dict, params:dict, endiannes=">"):
+		"""Обработчик
+		
+		Расставляет параметры в нужном порядке
+		Преобразует формат и параметры, вставляя нужные данные
+		Пакует данные в байты
+
+		fmt (dict): в виде param_name:struct_fmt
+		params (dict): в виде param_name:value
+		endiannes (str): byte-order
+		"""
+
+		params = Retranslator.in_correct_order(fmt, params)
+		fmt, params = Retranslator.handler(''.join(fmt.values()), params)
+		block = Retranslator.pack_data(fmt, params, endiannes)
+		return block
 
 
 	@staticmethod
@@ -342,3 +347,7 @@ class Retranslator(TCPConnection):
 		else:
 			logger.critical("Неизвестный формат даты и времени")
 			raise ValueError("Неизвестный формат времени")
+
+
+	def __str__(self):
+		return f"{self.protocol_name} [{self.ip}:{self.port}]"

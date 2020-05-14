@@ -8,4 +8,9 @@ handler.setFormatter(frt)
 
 logger = logging.getLogger('history')
 logger.addHandler(handler)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
+
+# console = logging.StreamHandler()
+# console.setLevel(logging.INFO)
+# console.setFormatter(frt)
+# logger = logging.getLogger('').addHandler(console)

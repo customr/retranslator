@@ -1,7 +1,7 @@
 import struct
 import time
 
-from binascii import hexlify
+from binascii import hexlify, a2b_hex
 
 from src.core import Retranslator
 from src.crc import crc8, crc16
@@ -92,12 +92,21 @@ class EGTS(Retranslator):
 		if data.get('time', ''):
 			data['time'] = self.get_egts_time(data['time'])
 
+		if action=='posinfo':
+			dout = data['sens']
+			dout = (dout<<1)+data['ign']
+			data.update({"din": dout})
+
+			self.handle_spd_and_dir(data['speed'], data['direction'])
+
 		packet = bytes()
+
 		for name, params in self.protocol[action].items():
+			if '$' in name: name = name[:name.index('$')]
 			fmt = self.protocol["FORMATS"][name]
 			params = self.paste_data_into_params(params, data, fmt)
 			self.data.update(params)
-			block = Retranslator.processing(fmt, params, '=')
+			block = Retranslator.processing(fmt, params, '<')
 
 			if name=="EGTS_PACKET_HEADER":
 				control_sum = crc8(block)
@@ -114,6 +123,21 @@ class EGTS(Retranslator):
 		self.packet += packet + control_sum
 
 		self.inc_rid()
+		print(self.pid, self.rid)
+
+
+	def handle_spd_and_dir(self, speed, dr):
+		spdl = speed % 16
+		dirl = dr % 16
+
+		dirh = dr // 16
+		spdh = speed // 16
+
+		spdh_alt_dirh = spdl * 16
+		spdh_alt_dirh = (spdh_alt_dirh+dirh) * 16 * 16
+		spdh_alt_dirh += spdh
+		
+		self.data.update({"spdl": spdl, "spdh_alt_dirh": spdh_alt_dirh, "dirl": dirl})
 
 
 	def inc_pid(self):
@@ -137,16 +161,13 @@ class EGTS(Retranslator):
 
 
 	@staticmethod
-	def get_egts_time(tm=0):
+	def get_egts_time(tm):
 		egts_time = 1262289600 #timestamp 2010-01-01 00:00:00
 
-		if not tm:
-			return int(time.time())-egts_time
-		else:
-			if isinstance(tm, str):
-				tm = Retranslator.get_timestamp(tm)
+		if isinstance(tm, str):
+			tm = Retranslator.get_timestamp(tm)
 
-			return tm-egts_time
+		return tm-egts_time
 
 
 	@staticmethod
