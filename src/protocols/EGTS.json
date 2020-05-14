@@ -15,12 +15,17 @@
 			"record_length":	  	 "H",
 			"record_number": 	  	 "H",
 			"record_flags": 	  	 "B",
-			"oid": 			  	 	 "I",
+			"time": 			  	 "I",
 			"sourse_service_type":	 "b",
 			"recipient_service_type":"b"
 		},
 
-		"EGTS_SUBRECORD_HEADER": {
+		"EGTS_SUBRECORD_HEADER_1": {
+			"type":  "b",
+			"length":"H"
+		},
+
+		"EGTS_SUBRECORD_HEADER_2": {
 			"type":  "b",
 			"length":"H"
 		},
@@ -37,12 +42,13 @@
 			"lat": 			"I",
 			"lon": 			"I",
 			"flags": 		"B",
-			"speed": 		"H",
+			"speed": 		"h",
 			"dir": 			"B",
-			"odm1": 		"h",
+			"odm1": 		"H",
 			"odm2": 		"?",
 			"din": 			"B",
-			"src": 			"B"
+			"src": 			"B",
+			"srcd":			"H"
 		},
 
 		"EGTS_SR_EXT_POS_DATA_RECORD": {
@@ -73,66 +79,67 @@
 
 		"EGTS_RECORD_HEADER": {
 			"record_length":	  	 25,
-			"record_number": 	  	 1,
-			"record_flags": 	  	 129,
-			"oid": 			  	 	 50,
+			"record_number": 	  	 "*rid",
+			"record_flags": 	  	 4,
+			"time": 			 	 "*time",
 			"sourse_service_type":	 1,
 			"recipient_service_type":1
 		},
 
-		"EGTS_SUBRECORD_HEADER": {
+		"EGTS_SUBRECORD_HEADER_1": {
 			"type":  1,
 			"length":22
 		},
 
 		"EGTS_SR_TERM_IDENTITY_RECORD": {
-			"tid":   50,
+			"tid":   "*imei[-6:]",
 			"flags": 66,
 			"imei":  "*imei",
 			"buf": 	 256
 		}
 	},
 
-	"pos_data": {
+	"posinfo": {
 		"EGTS_PACKET_HEADER": {
 			"protocol_version": 1,
 			"security_key_id": 	0,
 			"flags": 			0,
 			"header_length": 	11,
 			"header_encoding": 	0,
-			"frame_data_length":47,
+			"frame_data_length":44,
 			"pid": 				"*pid",
 			"packet_type": 		1
 		},
 
 		"EGTS_RECORD_HEADER": {
-			"record_length":	  	 36,
+			"record_length":	  	 33,
 			"record_number": 	  	 "*rid",
-			"record_flags": 	  	 129,
-			"oid": 			  	 	 50,
+			"record_flags": 	  	 4,
+			"time": 		  	     "*time",
 			"sourse_service_type":	 2,
 			"recipient_service_type":2
 		},
 
-		"EGTS_SUBRECORD_HEADER": {
+		"EGTS_SUBRECORD_HEADER_1": {
 			"type":  16,
-			"length":26
+			"length":23
 		},
 
 		"EGTS_SR_POS_DATA_RECORD": {
-			"egts_time": 	"*egts_time",
+			"time": 		"*time",
 			"lat": 			"*lat",
 			"lon": 			"*lon",
-			"flags": 		"*flags",
+			"flags": 		129,
 			"speed": 		"*speed",
-			"dir": 			"*dir",
+			"dir": 			"*direction",
 			"odm1": 		0,
 			"odm2": 		0,
 			"din": 			0,
-			"src": 			0
+			"src": 			0,
+			"srcd":			0
 		},
 
-		"EGTS_SUBRECORD_HEADER": {
+		"EGTS_SUBRECORD_HEADER_2": {
 			"type":  17,
 			"length":4
 		},

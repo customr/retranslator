@@ -11,7 +11,7 @@
 			"block_size":	"i", 	
 			"reserved_attr":"b",	
 			"data_type": 	"b",	
-			"block_name":	"?sx"
+			"block_name":	"=sx"
 		},
 
 		"posinfo":{

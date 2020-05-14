@@ -15,14 +15,9 @@ def crc16(data, offset=0, length=0):
         length = len(data)
 
     for i in range(offset, length+offset):
-        crc ^= data[i] << 8
-        for j in range(8):
-            if (crc & 0x8000) > 0:
-                crc =(crc << 1) ^ 0x1021
-            else:
-                crc = crc << 1
+        crc = ((crc << 8) % 0x10000) ^ crc16_table[(crc >> 8) ^ data[i]]
 
-    return crc & 0xFFFF
+    return crc
 
 
 crc8_table = (

@@ -1,6 +1,8 @@
 import struct
 import time
 
+from binascii import hexlify
+
 from src.core import Retranslator
 from src.crc import crc8, crc16
 
@@ -27,7 +29,7 @@ class WialonRetranslator(Retranslator):
 		super().__init__("WialonRetranslator", ip, port)
 
 
-	def add_block(self, name, **params):
+	def add_template(self, name, **params):
 		"""
 		Добавляет часть пакета описанную в json
 
@@ -52,7 +54,7 @@ class WialonRetranslator(Retranslator):
 				block += Retranslator.pack_data(datatype, params.values())
 
 		self.packet += block
-		self.make_log("info", f"Добавлен блок '{name}' в пакет данных")
+		self.make_log("debug", f"Добавлен блок '{name}' в пакет данных")
 
 
 	def send(self):
@@ -62,14 +64,6 @@ class WialonRetranslator(Retranslator):
 		packet_size = struct.pack("<I", packet_size)
 		self.packet = packet_size + self.packet
 		super().send()
-
-
-	@staticmethod
-	def get_timestamp(t):
-		if isinstance(t, str):
-			return int(time.mktime(time.strptime(t, self.DATE_FORMAT)))
-		else:
-			raise ValueError("Неизвестный формат времени")
 
 
 class EGTS(Retranslator):
@@ -82,51 +76,45 @@ class EGTS(Retranslator):
 		"""
 
 		super().__init__("EGTS", ip, port)
-		self.pid = 1
-		self.rid = 1
+		self.pid = 0
+		self.rid = 0
 
 
 	def add_template(self, action, **data):
 		assert action in self.protocol.keys(), 'Неизвестное имя добавляемого шаблона'
 
-		def paste_data(params, data):
-			for n in params.keys():
-				if isinstance(params[n], str):
-					if "*"==params[n][0]:
-						try:
-							params[n] = data[params[n][1:]]
-						except KeyError:
-							try:
-								params[n] = getattr(self, params[n][1:])
-							except KeyError:
-								raise KeyError(f"Не хватает параметра '{params[n][1:]}' в пакете")
-				else:
-					continue
+		if data.get('lat', ''):
+			data['lat'] = self.get_lat(data['lat'])
 
-			return params
+		if data.get('lon', ''):
+			data['lon'] = self.get_lon(data['lon'])
+
+		if data.get('time', ''):
+			data['time'] = self.get_egts_time(data['time'])
 
 		packet = bytes()
 		for name, params in self.protocol[action].items():
 			fmt = self.protocol["FORMATS"][name]
-			params = paste_data(params, data)
+			params = self.paste_data_into_params(params, data, fmt)
+			self.data.update(params)
 			block = Retranslator.processing(fmt, params, '=')
 
 			if name=="EGTS_PACKET_HEADER":
 				control_sum = crc8(block)
-				control_sum = struct.pack("<B", control_sum)
+				control_sum = struct.pack(">B", control_sum)
 				block += control_sum
+				self.inc_pid()
 
 			packet += block
-			self.make_log("info", f"[{action}] Добавлен блок '{name}' (size {len(block)} bytes")
+			self.make_log("debug", f"[{action}] Добавлен блок '{name}' (size {len(block)} bytes)\n{hexlify(block)}")
 
 		control_sum = crc16(packet, 11, len(packet)-11)
-		control_sum = struct.pack("<H", control_sum)
-		self.make_log("info", f"[{action}] Добавлена контрольная сумма записи (size {len(control_sum)} bytes)")
+		control_sum = struct.pack(">H", control_sum)
+		self.make_log("debug", f"[{action}] Добавлена контрольная сумма записи (size {len(control_sum)} bytes)\n{hexlify(control_sum)}")
 		self.packet += packet + control_sum
 
-		self.inc_pid()
 		self.inc_rid()
-		
+
 
 	def inc_pid(self):
 		if self.pid == 0xffff:
@@ -149,9 +137,16 @@ class EGTS(Retranslator):
 
 
 	@staticmethod
-	def get_time():
+	def get_egts_time(tm=0):
 		egts_time = 1262289600 #timestamp 2010-01-01 00:00:00
-		return int(time.time())-egts_time
+
+		if not tm:
+			return int(time.time())-egts_time
+		else:
+			if isinstance(tm, str):
+				tm = Retranslator.get_timestamp(tm)
+
+			return tm-egts_time
 
 
 	@staticmethod
