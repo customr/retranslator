@@ -54,7 +54,7 @@ class WialonRetranslator(Retranslator):
 				block += Retranslator.pack_data(datatype, params.values())
 
 		self.packet += block
-		self.make_log("debug", f"Добавлен блок '{name}' в пакет данных")
+		self.make_log("debug", f"Добавлен блок '{name}' (size {len(block)} bytes)\n{hexlify(block)}")
 
 
 	def send(self, uid):
@@ -143,15 +143,13 @@ class EGTS(Retranslator):
 
 
 	def handle_spd_and_dir(self, speed, dr):
-		speed *= 10
-		dr *= 10
+		#FIX THIS
 		spdl = int(speed) % 2**8
 		spdh = int(speed) // 2**8
 		dirl = dr % 2**8
 		dirh = dr // 2**8
-		spd_alts_dirh = ((spdl*2+dirh)*2+0)*2**6+spdh
-		
-		self.data.update({"spd_alts_dirh": spd_alts_dirh, "dirl": dirl})
+		spd_alts_dirh = ((spdl+dirh*2)*2)*2**8+spdh
+		self.data.update({"spd_alts_dirh": 0, "dirl": 0})
 
 
 	@staticmethod

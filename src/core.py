@@ -15,7 +15,7 @@ DATE_FORMAT = "%Y-%m-%d %H:%M:%S" #формат даты и времени (ка
 
 class TCPConnection:
 
-	CONNECTION_ATTEMPTS = 40 #максимальное количество попыток соединиться с сервером
+	CONNECTION_ATTEMPTS = 50 #максимальное количество попыток соединиться с сервером
 	ATTEMPTS_DELAY = 10 #начальное кол-во секунд паузы
 
 	def __init__(self, dst_ip:str, dst_port:int):
@@ -48,7 +48,8 @@ class TCPConnection:
 
 			except Exception as e:
 				self.make_log("error", f'Не удалось установить соединение. Попытка №{self.CONNECTION_ATTEMPTS-attempts} ({e})')
-				sleeptime = min(self.ATTEMPTS_DELAY*(self.CONNECTION_ATTEMPTS-attempts-1), 10000)
+				sleeptime = min(abs(self.ATTEMPTS_DELAY*(self.CONNECTION_ATTEMPTS-attempts)**2), 10000)
+				print(sleeptime)
 				sleep(sleeptime)
 				self.connect(attempts-1)
 
@@ -146,10 +147,6 @@ class Retranslator(TCPConnection):
 		if not os.path.exists(p):
 			os.makedirs(p)
 
-		p = os.path.join(os.path.join(self.DATA_DIR, self.protocol_name), self.protocol_name+'.id')
-		if not os.path.exists(p):
-			open(p, 'w').close()
-
 		self.make_log("info", f"Протокол {protocol_name} инициализирован")
 
 
@@ -159,29 +156,24 @@ class Retranslator(TCPConnection):
 
 		uid (int): уникальный идентификатор записи бд
 		"""
+		if uid:
+			pth = os.path.join(self.DATA_DIR, self.protocol_name, self.ip+'.id')
+			with open(pth, 'w') as w:
+				w.write(str(uid))
 
 		self.make_log("info", f"Началась отправка пакета данных")
 		result_code = super().send(self.packet)
 		if result_code:
 			self.make_log("error", 'Потеряно соединение с сервером')
-			if uid:
-				pth = os.path.join(self.protocol["DATA_PATH"], self.protocol_name+'.id')
-				with open(pth, 'w') as w:
-					w.write(uid)
-
-				self.make_log("warning", f"Сохранен идентификатор последней записи {uid}")
-
 			self.socket.shutdown(socket.SHUT_RDWR)
 			self.socket.close()
+			self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			self.connect(self.CONNECTION_ATTEMPTS)
 			result_code = super().send(self.packet)
 
 			if result_code:
 				self.make_log('critical', 'Пакет вызывает ошибку на сервере')
 				raise RuntimeError('Пакет вызывает ошибку на сервере')
-
-			else:
-				open(pth, 'w').close()
 
 		self.reset()
 		return result_code
@@ -422,15 +414,10 @@ class Retranslator(TCPConnection):
 			os.makedirs(dr)
 
 		p = os.path.join(dr, name)
+		with open(p, 'r') as s:
+			file = load(s)
 
-		if not os.path.exists(p):
-			open(p, 'w').close()
-
-		else:
-			with open(p, 'r') as s:
-				file = load(s)
-
-			return file
+		return file
 
 
 	def __str__(self):
