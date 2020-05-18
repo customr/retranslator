@@ -57,13 +57,22 @@ class WialonRetranslator(Retranslator):
 		self.make_log("debug", f"Добавлен блок '{name}' в пакет данных")
 
 
-	def send(self):
+	def send(self, uid):
 		assert len(self.packet)>0
 
 		packet_size = len(self.packet)
 		packet_size = struct.pack("<I", packet_size)
 		self.packet = packet_size + self.packet
-		super().send()
+		super().send(uid)
+
+
+	def send_posinfo(self, **data):
+		pdata = {key:data[key] for key in ['lon', 'lat', 'speed', 'direction', 'sat_num', 'time']}
+		self.add_template("header", imei=str(data["imei"]), tm=int(time.time()))
+		self.add_template("posinfo", **pdata)
+		self.add_template("ign", ign=data["ign"])
+		self.add_template('sens', sens=data["sens"])
+		self.send(data['id'])
 
 
 class EGTS(Retranslator):
@@ -76,88 +85,84 @@ class EGTS(Retranslator):
 		"""
 
 		super().__init__("EGTS", ip, port)
-		self.pid = 0
-		self.rid = 0
+		self.data = {"pid":1, "rid":1}
+		self.authorized_imei = ''
 
 
 	def add_template(self, action, **data):
 		assert action in self.protocol.keys(), 'Неизвестное имя добавляемого шаблона'
 
-		if data.get('lat', ''):
-			data['lat'] = self.get_lat(data['lat'])
-
-		if data.get('lon', ''):
-			data['lon'] = self.get_lon(data['lon'])
-
-		if data.get('time', ''):
-			data['time'] = self.get_egts_time(data['time'])
-
 		if action=='posinfo':
-			dout = data['sens']
-			dout = (dout<<1)+data['ign']
-			data.update({"din": dout})
-
 			self.handle_spd_and_dir(data['speed'], data['direction'])
 
 		packet = bytes()
-
+		self.data.update(data)
 		for name, params in self.protocol[action].items():
 			if '$' in name: name = name[:name.index('$')]
 			fmt = self.protocol["FORMATS"][name]
-			params = self.paste_data_into_params(params, data, fmt)
-			self.data.update(params)
+			params = self.paste_data_into_params(params, self.data, fmt)
 			block = Retranslator.processing(fmt, params, '<')
 
 			if name=="EGTS_PACKET_HEADER":
 				control_sum = crc8(block)
-				control_sum = struct.pack(">B", control_sum)
+				control_sum = struct.pack("<B", control_sum)
 				block += control_sum
-				self.inc_pid()
+				self.data["pid"] = self.inc_id(self.data['pid'])
+
+			if name=="EGTS_RECORD_HEADER":
+				self.data["rid"] = self.inc_id(self.data['rid'])
 
 			packet += block
 			self.make_log("debug", f"[{action}] Добавлен блок '{name}' (size {len(block)} bytes)\n{hexlify(block)}")
 
 		control_sum = crc16(packet, 11, len(packet)-11)
-		control_sum = struct.pack(">H", control_sum)
+		control_sum = struct.pack("<H", control_sum)
 		self.make_log("debug", f"[{action}] Добавлена контрольная сумма записи (size {len(control_sum)} bytes)\n{hexlify(control_sum)}")
 		self.packet += packet + control_sum
 
-		self.inc_rid()
-		print(self.pid, self.rid)
+
+	def send_posinfo(self, **data):
+		if str(self.authorized_imei)!=str(data['imei']):
+			self.add_template("authentication", imei=str(data['imei']), time=int(time.time()))
+			rcode = self.send()
+			if not rcode:
+				self.authorized_imei = str(data['imei'])
+
+			else:
+				raise RuntimeError('Авторизация не удалась')
+
+		rdata = {key:data[key] for key in ['lon', 'lat', 'speed', 'direction', 'sat_num', 'sens', 'ign', 'time']}
+		rdata['lat'] = self.get_lat(rdata['lat'])
+		rdata['lon'] = self.get_lon(rdata['lon'])
+		rdata['time'] = self.get_egts_time(rdata['time'])
+		dout = rdata['sens']
+		dout = (dout<<1)+rdata['ign']
+		rdata.update({"din": dout})
+		self.add_template("posinfo", **rdata)
+		self.send(data['id'])
 
 
 	def handle_spd_and_dir(self, speed, dr):
-		spdl = speed % 16
-		dirl = dr % 16
-
-		dirh = dr // 16
-		spdh = speed // 16
-
-		spdh_alt_dirh = spdl * 16
-		spdh_alt_dirh = (spdh_alt_dirh+dirh) * 16 * 16
-		spdh_alt_dirh += spdh
+		speed *= 10
+		dr *= 10
+		spdl = int(speed) % 2**8
+		spdh = int(speed) // 2**8
+		dirl = dr % 2**8
+		dirh = dr // 2**8
+		spd_alts_dirh = ((spdl*2+dirh)*2+0)*2**6+spdh
 		
-		self.data.update({"spdl": spdl, "spdh_alt_dirh": spdh_alt_dirh, "dirl": dirl})
+		self.data.update({"spd_alts_dirh": spd_alts_dirh, "dirl": dirl})
 
 
-	def inc_pid(self):
-		if self.pid == 0xffff:
-			self.pid = 0
-
-		else:
-			self.pid += 1
-
-		return self.pid
-
-
-	def inc_rid(self):
-		if self.rid == 0xffff:
-			self.rid = 0
+	@staticmethod
+	def inc_id(value):
+		if value == 0xffff:
+			value = 0
 
 		else:
-			self.rid += 1
+			value += 1
 
-		return self.rid
+		return value
 
 
 	@staticmethod

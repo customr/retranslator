@@ -1,4 +1,4 @@
-{	
+{
 	"FORMATS": {
 		"EGTS_PACKET_HEADER": {
 			"protocol_version": "B",
@@ -13,7 +13,7 @@
 
 		"EGTS_RECORD_HEADER": {
 			"record_length":	  	 "H",
-			"record_number": 	  	 "H",
+			"rid":			 	  	 "H",
 			"record_flags": 	  	 "B",
 			"oid":					 "I",
 			"time": 			  	 "I",
@@ -38,8 +38,7 @@
 			"lat": 			"I",
 			"lon": 			"I",
 			"flags": 		"B",
-			"spdl": 		"B",
-			"spdh_alt_dirh":"H",
+			"spd_alts_dirh":"H",
 			"dirl": 		"B",
 			"odm1": 		"H",
 			"odm2": 		"?",
@@ -68,16 +67,16 @@
 			"header_length": 	11,
 			"header_encoding": 	0,
 			"frame_data_length":40,
-			"pid": 				1,
+			"pid": 				"&pid",
 			"packet_type": 		1
 		},
 
 		"EGTS_RECORD_HEADER": {
 			"record_length":	  	 25,
-			"record_number": 	  	 "*rid",
+			"rid":		    	  	 "&rid",
 			"record_flags": 	  	 5,
-			"oid":					 "*imei[-6:]",
-			"time": 			 	 "*time",
+			"oid":					 "&imei[-6:]",
+			"time": 			 	 "&time",
 			"sourse_service_type":	 1,
 			"recipient_service_type":1
 		},
@@ -88,9 +87,9 @@
 		},
 
 		"EGTS_SR_TERM_IDENTITY_RECORD": {
-			"tid":   "*imei[-6:]",
+			"tid":   "&imei[-6:]",
 			"flags": 66,
-			"imei":  "*imei",
+			"imei":  "&imei",
 			"buf": 	 256
 		}
 	},
@@ -102,17 +101,17 @@
 			"flags": 			0,
 			"header_length": 	11,
 			"header_encoding": 	0,
-			"frame_data_length":51,
-			"pid": 				"*pid",
+			"frame_data_length":46,
+			"pid": 				"&pid",
 			"packet_type": 		1
 		},
 
 		"EGTS_RECORD_HEADER": {
-			"record_length":	  	 36,
-			"record_number": 	  	 "*rid",
+			"record_length":	  	 31,
+			"rid":		    	  	 "&rid",
 			"record_flags": 	  	 5,
-			"oid":					 "*imei[-6:]",
-			"time": 		  	     "*time",
+			"oid":					 "&imei[-6:]",
+			"time": 		  	     "&time",
 			"sourse_service_type":	 2,
 			"recipient_service_type":2
 		},
@@ -123,28 +122,27 @@
 		},
 
 		"EGTS_SR_POS_DATA_RECORD": {
-			"time": 		"*time",
-			"lat": 			"*lat",
-			"lon": 			"*lon",
+			"time": 		"&time",
+			"lat": 			"&lat",
+			"lon": 			"&lon",
 			"flags": 		129,
-			"spdl": 		"*spdl",
-			"spdh_alt_dirh":"*spdh_alt_dirh",
-			"dirl": 		"*direction",
+			"spd_alts_dirh":"&spd_alts_dirh",
+			"dirl": 		"&dirl",
 			"odm1": 		0,
 			"odm2": 		0,
-			"din": 			"*din",
+			"din": 			"&din",
 			"src": 			0,
 			"srcd":			0
 		},
 
 		"EGTS_SUBRECORD_HEADER$2": {
 			"type":  17,
-			"length":4
+			"length":2
 		},
 
 		"EGTS_SR_EXT_POS_DATA_RECORD": {
 			"flags": 	8,
-			"sat_num": 	"*sat_num"
+			"sat_num": 	"&sat_num"
 		}
 	}
 }
