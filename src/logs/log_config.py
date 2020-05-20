@@ -1,9 +1,15 @@
 import logging
+from logging.handlers import RotatingFileHandler
 
 
 frt = logging.Formatter('%(levelname)s :: %(message)s %(asctime)s\n'+'-'*75)
 
-handler = logging.FileHandler('src/logs/history.log', mode='a')
+handler = RotatingFileHandler(
+	'src/logs/history.log', mode='a', 
+	maxBytes=1024*1024, backupCount=2, 
+	encoding=None, delay=0
+	)
+
 handler.setFormatter(frt)
 
 logger = logging.getLogger('history')

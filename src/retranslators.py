@@ -94,6 +94,7 @@ class EGTS(Retranslator):
 
 		if action=='posinfo':
 			self.handle_spd_and_dir(data['speed'], data['direction'])
+			self.handle_posflags(data['ign'])
 
 		packet = bytes()
 		self.data.update(data)
@@ -125,31 +126,28 @@ class EGTS(Retranslator):
 		if str(self.authorized_imei)!=str(data['imei']):
 			self.add_template("authentication", imei=str(data['imei']), time=int(time.time()))
 			rcode = self.send()
-			if not rcode:
-				self.authorized_imei = str(data['imei'])
-
-			else:
-				raise RuntimeError('Авторизация не удалась')
+			self.authorized_imei = str(data['imei'])
 
 		rdata = {key:data[key] for key in ['lon', 'lat', 'speed', 'direction', 'sat_num', 'sens', 'ign', 'time']}
 		rdata['lat'] = self.get_lat(rdata['lat'])
 		rdata['lon'] = self.get_lon(rdata['lon'])
 		rdata['time'] = self.get_egts_time(rdata['time'])
-		dout = rdata['sens']
-		dout = (dout<<1)+rdata['ign']
-		rdata.update({"din": dout})
+		rdata.update({"din": rdata['sens']})
 		self.add_template("posinfo", **rdata)
 		self.send(data['id'])
 
 
 	def handle_spd_and_dir(self, speed, dr):
-		#FIX THIS
-		spdl = int(speed) % 2**8
-		spdh = int(speed) // 2**8
-		dirl = dr % 2**8
-		dirh = dr // 2**8
-		spd_alts_dirh = ((spdl+dirh*2)*2)*2**8+spdh
-		self.data.update({"spd_alts_dirh": 0, "dirl": 0})
+		speed *= 10
+		self.data.update({"spd": speed, "dir": dr})
+
+
+	def handle_posflags(self, ign):
+		posflags = 1 #флаг VLD
+		if ign:
+			posflags += 0b10000 #флаг MV
+
+		self.data.update({"posflags": posflags})
 
 
 	@staticmethod
