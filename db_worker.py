@@ -15,10 +15,10 @@ USER 		= 	'root'
 PASSWD 		=	'root'
 DB 			= 	'devices'
 
-RECORDS_TBL = 	'geo'
+RECORDS_TBL = 	'geo'  	 #имя дб, в которую поступают записи
 
-ID_PATH 	= 	"src/id"
-DELAY 		= 	10
+ID_PATH 	= 	"id" 	 #путь к файлу, который содержит в себе последний выложенный id
+DELAY 		= 	10   	 #через сколько секунд проверять бд на наличие новых записей
 
 CONN 		= 	{
 				"host"		 : 	HOST,
@@ -94,3 +94,6 @@ def get_records(connection):
 				continue
 
 	return records
+
+if not os.path.exists(ID_PATH):
+	open(ID_PATH, 'w').close()
