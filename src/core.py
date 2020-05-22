@@ -54,7 +54,7 @@ class TCPConnection:
 				self.connect(attempts-1)
 
 		else:
-			self.make_log("critical", 'Невозможно установить соединение')
+			logger.critical('Невозможно установить соединение')
 			self.socket.close()
 			raise RuntimeError('Невозможно установить соединение')
 
@@ -83,7 +83,7 @@ class TCPConnection:
 			return 0
 
 		except Exception as e:
-			self.make_log("critical", f"Ошибка при отправке данных ({e})")
+			logger.critical(f"Ошибка при отправке данных ({e})")
 			return -1
 
 
@@ -106,23 +106,27 @@ class TCPConnection:
 			logger.warning(msg + f"\n[{self.dst_ip}:{self.dst_port}] ")
 
 
-	def __del__(self):
+	def close(self):
 		self.socket.shutdown(socket.SHUT_RDWR)
 		self.make_log("info", "Соединение разорвано")
 		self.socket.close()	
 
+	def __repr__(self):
+		return f'TCPConnection on [{self.dst_ip}:{self.dst_port}]'
 
-class Retranslator(TCPConnection):
+	def __str__(self):
+		return self.__repr__()
+
+
+class Retranslator:
 
 	PROTOCOLS_DIR = "src/protocols/" #место где лежат json'ы с описанием протоколов
 	DATA_DIR = "src/protocols/data/" #место под данные
 
-	def __init__(self, protocol_name:str, ip:str, port:int):
+	def __init__(self, protocol_name:str):
 		"""Родитель всех протоколов
 
-		protocol_name (str): имя протокола, как в папке PROTOCOLS_DIR без 
-		ip (str): адрес сервера
-		port (int): порт сервера
+		protocol_name (str): имя протокола, как в папке PROTOCOLS_DIR без расширения
 		header_is_ready (bool): флаг, есть ли уже header в пакете, или нет
 		packet (bytes): пакет данных
 		packet_format (str): struct-формат всего пакета
@@ -132,10 +136,6 @@ class Retranslator(TCPConnection):
 
 		"""
 		assert isinstance(protocol_name, str)
-
-		super().__init__(ip, port)
-		self.ip = ip
-		self.port = port
 		self.protocol_name = protocol_name
 
 		self.packet = bytes()
@@ -143,37 +143,33 @@ class Retranslator(TCPConnection):
 
 		self.protocol = Retranslator.get_json(self.PROTOCOLS_DIR, self.protocol_name+".json")
 
-		p = os.path.join(self.DATA_DIR, self.protocol_name)
+		p = os.path.join(self.DATA_DIR, self.protocol_name.lower())
 		if not os.path.exists(p):
 			os.makedirs(p)
 
-		self.make_log("info", f"Протокол {protocol_name} инициализирован")
+		logger.info(f"Протокол {protocol_name} инициализирован")
 
 
-	def send(self, uid=0):
+	def send(self, conn):
 		"""
 		Перегруженный родительский метод отправки сообщения
-
-		uid (int): уникальный идентификатор записи бд
+		
+		conn (TCPConnection)
 		"""
-		if uid:
-			pth = os.path.join(self.DATA_DIR, self.protocol_name, self.ip+'.id')
-			with open(pth, 'w') as w:
-				w.write(str(uid))
 
-		self.make_log("info", f"Началась отправка пакета данных")
-		result_code = super().send(self.packet)
+		conn.make_log("info", f"Началась отправка пакета данных")
+		result_code = conn.send(self.packet)
+
 		if result_code:
-			self.make_log("error", 'Потеряно соединение с сервером')
-			self.socket.shutdown(socket.SHUT_RDWR)
-			self.socket.close()
-			self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-			self.connect(self.CONNECTION_ATTEMPTS)
-			result_code = super().send(self.packet)
+			conn.make_log("error", 'Потеряно соединение с сервером')
+			conn.socket.shutdown(socket.SHUT_RDWR)
+			conn.socket.close()
+			conn.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+			conn.connect(self.CONNECTION_ATTEMPTS)
+			result_code = conn.send(self.packet)
 
 			if result_code:
-				self.make_log('critical', 'Пакет вызывает ошибку на сервере')
-				raise RuntimeError('Пакет вызывает ошибку на сервере')
+				conn.make_log('critical', 'Пакет вызывает ошибку на сервере')
 
 		self.reset()
 		return result_code
@@ -184,7 +180,7 @@ class Retranslator(TCPConnection):
 		Восстанавливает класс в исходное состояние
 		"""
 		self.packet = bytes()
-		self.make_log("debug", "Ретранслятор очищен от данных")
+		logger.debug("Ретранслятор очищен от данных")
 
 
 	def paste_data_into_params(self, p, data, formats):
@@ -235,7 +231,7 @@ class Retranslator(TCPConnection):
 
 					else:
 						error_msg = f"Параметр '{params[n]}' не найден"
-						self.make_log("critical", error_msg)
+						logger.critical(error_msg)
 						raise KeyError(error_msg)
 
 					if slc:
@@ -248,7 +244,7 @@ class Retranslator(TCPConnection):
 							params[n] = params[n][:int(r_slc)]
 						else:
 							error_msg = f"Неправильно указан срез параметра {params[n]}[{l_slc}:{r_slc}]"
-							self.make_log("critical", error_msg)
+							logger.critical(error_msg)
 							raise KeyError(error_msg)
 
 					if other_format:
@@ -262,7 +258,7 @@ class Retranslator(TCPConnection):
 							params[n] = bytes(str(params[n]).encode('ascii'))
 						else:
 							error_msg = f"Ошибка в типе данных '{params[n]} : {fmt}'"
-							self.make_log("critical", error_msg)
+							logger.critical(error_msg)
 							raise ValueError(error_msg)
 
 			else:
@@ -421,4 +417,8 @@ class Retranslator(TCPConnection):
 
 
 	def __str__(self):
-		return f"{self.protocol_name} [{self.ip}:{self.port}]"
+		return f"Protocol {self.protocol_name}"
+
+
+	def __repr__(self):
+		return self.__str__()

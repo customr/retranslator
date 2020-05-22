@@ -3,6 +3,7 @@ import time
 
 from binascii import hexlify, a2b_hex
 
+from src.logs.log_config import logger
 from src.core import Retranslator
 from src.crc import crc8, crc16
 
@@ -18,15 +19,11 @@ class WialonRetranslator(Retranslator):
 		5: 'l'
 	}
 
-	def __init__(self, ip, port):
+	def __init__(self):
 		"""WialonRetranslator протокол
 		https://gurtam.com/hw/files/Wialon%20Retranslator_v1.pdf
-
-		ip (str): ip адрес получателся
-		port (int): порт получаетеля
 		"""
-
-		super().__init__("WialonRetranslator", ip, port)
+		super().__init__("WialonRetranslator")
 
 
 	def add_template(self, name, **params):
@@ -38,7 +35,7 @@ class WialonRetranslator(Retranslator):
 		"""
 		block = bytes()
 
-		if not name=='header':
+		if name!='header':
 			fmt = self.protocol["FORMATS"]['blockheader']
 			data = self.protocol["PARAMS"]["blockheader"][name]
 			block += Retranslator.processing(fmt, data)
@@ -54,29 +51,25 @@ class WialonRetranslator(Retranslator):
 				block += Retranslator.pack_data(datatype, params.values())
 
 		self.packet += block
-		self.make_log("debug", f"Добавлен блок '{name}' (size {len(block)} bytes)\n{hexlify(block)}")
+		logger.debug(f"Добавлен блок '{name}' (size {len(block)} bytes)\n{hexlify(block)}")
 
 
-	def send(self, uid):
-		assert len(self.packet)>0
+	def send_record(self, conn, **data):
+		pdata = {key:data[key] for key in ['lon', 'lat', 'speed', 'direction', 'sat_num']}
+		self.add_template("header", imei=str(data["imei"]), tm=data['datetime'])
+		self.add_template("posinfo", **pdata)
+		self.add_template("ign", ign=data["ignition"])
+		self.add_template('sens', sens=data["sensor"])
 
 		packet_size = len(self.packet)
 		packet_size = struct.pack("<I", packet_size)
 		self.packet = packet_size + self.packet
-		super().send(uid)
 
-
-	def send_posinfo(self, **data):
-		pdata = {key:data[key] for key in ['lon', 'lat', 'speed', 'direction', 'sat_num', 'time']}
-		self.add_template("header", imei=str(data["imei"]), tm=int(time.time()))
-		self.add_template("posinfo", **pdata)
-		self.add_template("ign", ign=data["ign"])
-		self.add_template('sens', sens=data["sens"])
-		self.send(data['id'])
+		return self.send(conn)
 
 
 class EGTS(Retranslator):
-	def __init__(self, ip, port):
+	def __init__(self):
 		"""EGTS протокол
 		https://www.swe-notes.ru/post/protocol-egts/
 
@@ -84,7 +77,7 @@ class EGTS(Retranslator):
 		port (int): порт получаетеля
 		"""
 
-		super().__init__("EGTS", ip, port)
+		super().__init__("EGTS")
 		self.data = {"pid":1, "rid":1}
 		self.authorized_imei = ''
 
@@ -94,7 +87,7 @@ class EGTS(Retranslator):
 
 		if action=='posinfo':
 			self.handle_spd_and_dir(data['speed'], data['direction'])
-			self.handle_posflags(data['ign'])
+			self.handle_posflags(data['ignition'])
 
 		packet = bytes()
 		self.data.update(data)
@@ -114,27 +107,28 @@ class EGTS(Retranslator):
 				self.data["rid"] = self.inc_id(self.data['rid'])
 
 			packet += block
-			self.make_log("debug", f"[{action}] Добавлен блок '{name}' (size {len(block)} bytes)\n{hexlify(block)}")
+			logger.debug(f"[{action}] Добавлен блок '{name}' (size {len(block)} bytes)\n{hexlify(block)}")
 
 		control_sum = crc16(packet, 11, len(packet)-11)
 		control_sum = struct.pack("<H", control_sum)
-		self.make_log("debug", f"[{action}] Добавлена контрольная сумма записи (size {len(control_sum)} bytes)\n{hexlify(control_sum)}")
+		logger.debug(f"[{action}] Добавлена контрольная сумма записи (size {len(control_sum)} bytes)\n{hexlify(control_sum)}")
 		self.packet += packet + control_sum
 
 
-	def send_posinfo(self, **data):
+	def send_record(self, conn, **data):
 		if str(self.authorized_imei)!=str(data['imei']):
 			self.add_template("authentication", imei=str(data['imei']), time=int(time.time()))
-			rcode = self.send()
+			rcode = self.send(conn)
 			self.authorized_imei = str(data['imei'])
 
-		rdata = {key:data[key] for key in ['lon', 'lat', 'speed', 'direction', 'sat_num', 'sens', 'ign', 'time']}
+		rdata = {key:data[key] for key in ['lon', 'lat', 'speed', 'direction', 'sat_num', 'sensor', 'ignition', 'datetime']}
 		rdata['lat'] = self.get_lat(rdata['lat'])
 		rdata['lon'] = self.get_lon(rdata['lon'])
-		rdata['time'] = self.get_egts_time(rdata['time'])
-		rdata.update({"din": rdata['sens']})
+		rdata['datetime'] = self.get_egts_time(rdata['datetime'])
+		rdata.update({"din": rdata['sensor']})
 		self.add_template("posinfo", **rdata)
-		self.send(data['id'])
+		
+		return self.send(conn)
 
 
 	def handle_spd_and_dir(self, speed, dr):
@@ -168,6 +162,7 @@ class EGTS(Retranslator):
 		if isinstance(tm, str):
 			tm = Retranslator.get_timestamp(tm)
 
+		tm = int(tm)
 		return tm-egts_time
 
 
