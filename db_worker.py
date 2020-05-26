@@ -91,3 +91,7 @@ def check_records(connection, ip, port):
 			if (row['lat'] is not None):
 				row.update({"ip":ip, "port":port}) 
 				rec_que.put(row)
+
+		rowcount = cursor.rowcount
+		
+	return rowcount

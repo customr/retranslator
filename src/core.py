@@ -27,9 +27,9 @@ class TCPConnections:
 				TCPConnections.NOT_CONNECTED.append((ip, port))
 
 		if len(TCPConnections.NOT_CONNECTED):
-			err_msg = f'Не удалось установить соединение с [{len(TCPConnections.NOT_CONNECTED)}/{len(ipport_tuple)}] серверами:\n'
-			err_msg += '\n'.join([f"{ip}:{port}" for ip, port in TCPConnections.NOT_CONNECTED])+'\n'
-			logger.error(err_msg)
+			msg = f'Не удалось установить соединение с [{len(TCPConnections.NOT_CONNECTED)}/{len(ipport_tuple)}] серверами:\n- '
+			msg += '\n- '.join([f"{ip}:{port}" for ip, port in TCPConnections.NOT_CONNECTED])+'\n'
+			logger.error(msg)
 
 		connect_th = threading.Thread(target=TCPConnections.retry_connect)
 		connect_th.start()
@@ -130,11 +130,6 @@ class Retranslator:
 		self.data = {}
 
 		self.protocol = Retranslator.get_json(self.PROTOCOLS_DIR, self.protocol_name+".json")
-
-		p = os.path.join(self.DATA_DIR, self.protocol_name.lower())
-		if not os.path.exists(p):
-			os.makedirs(p)
-
 		logger.info(f"Протокол {protocol_name} инициализирован\n")
 
 
