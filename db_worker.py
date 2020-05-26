@@ -1,11 +1,12 @@
 import os
 import pymysql
+import time
 
 from contextlib import closing
 from json import loads
-from time import sleep
+from queue import Queue
 
-from src.core import TCPConnection
+from src.core import TCPConnections
 from src.retranslators import WialonRetranslator, EGTS
 from src.logs.log_config import logger
 
@@ -15,10 +16,8 @@ USER 		= 	'root'
 PASSWD 		=	'root'
 DB 			= 	'devices'
 
-RECORDS_TBL = 	'geo'  	 #имя дб, в которую поступают записи
-
-ID_PATH 	= 	"id" 	 #путь к файлу, который содержит в себе последний выложенный id
-DELAY 		= 	10   	 #через сколько секунд проверять бд на наличие новых записей
+RECORDS_TBL = 	'geo_100'  	 #имя таблицы, в которую поступают записи
+DELAY 		= 	1.0   	 	 #через сколько секунд проверять бд на наличие новых записей
 
 CONN 		= 	{
 				"host"		 : 	HOST,
@@ -30,8 +29,8 @@ CONN 		= 	{
 				}
 
 RETRANSLATORS = {
-				'egts'				: 	EGTS(),
-				'wialonretranslator': 	WialonRetranslator(),
+				'EgtsRetranslator'	: 	EGTS(),
+				'WialonRetranslator': 	WialonRetranslator(),
 				}
 
 COLUMNS 	= 	(
@@ -48,52 +47,48 @@ COLUMNS 	= 	(
 				)
 
 
-def get_connections(connection):
-	connections = {}
+rec_que = Queue()
+
+def get_ipports(connection):
+	ipport_tuple = []
 	for ret_name in RETRANSLATORS.keys():
-		connections[ret_name] = []
 		with connection.cursor() as cursor:
-			query = f"SELECT * FROM {ret_name}"
+			query = f"SELECT DISTINCT ip, port FROM {ret_name.lower()}"
 			cursor.execute(query)
+			logger.info(f'{cursor.rowcount} соединений для {ret_name}\n')
 			for row in cursor:
-				conn = TCPConnection(row['ip'], row['port'])
-				connections[ret_name].append(conn)
+				if (row['ip'], int(row['port'])) not in ipport_tuple:
+					ipport_tuple.append((row['ip'], int(row['port'])))
 
-	return connections
+	return ipport_tuple
 
 
-def get_records(connection):
-	path = open(ID_PATH, 'r')
-	r = path.readline()
-	if r:
-		last_id = int(r)
-	else:
-		raise ValueError('id не установлен!')
-
-	path.close()
-
-	records = []
+def check_records(connection, ip, port):
 	with connection.cursor() as cursor:
-		query = f"SELECT * FROM {RECORDS_TBL} WHERE id > {last_id}"
-		while True:
+		query = f"SELECT MAX(`id`) FROM `sent_id` WHERE `ip`='{ip}' AND `port`={port}"
+		cursor.execute(query)
+		last_id = cursor.fetchone()['MAX(`id`)']
+		if last_id == None: last_id = 0
+
+	all_imei = []
+	for ret_name in RETRANSLATORS.keys():
+		with connection.cursor() as cursor:
+			query = f"SELECT `imei` FROM {ret_name.lower()} WHERE `ip`='{ip}' AND `port`={port}"
 			cursor.execute(query)
-			if cursor.rowcount!=0: break
-			logger.info(f'Новых записей не найдено. Жду {DELAY} секунд')
-			sleep(DELAY)
 
-		for row in cursor:
+			for i in cursor.fetchall():
+				all_imei.append(i['imei'])
+
+	with connection.cursor() as cursor:
+		query = f"SELECT * FROM {RECORDS_TBL} WHERE `id`>{last_id} AND (imei={all_imei[0]}"
+		for imei in all_imei[1:]:
+			query += f' OR imei={imei}'
+
+		query += ')'
+		cursor.execute(query)
+
+		logger.info(f'Найдено {cursor.rowcount} записей для [{ip}:{port}]\n')
+		for row in cursor.fetchall():
 			if (row['lat'] is not None):
-				row['reserve'] = loads('{'+row['reserve']+'}')
-				row.update(row['reserve'])
-				del(row['reserve'])
-				row['datetime'] = int(row['datetime'].timestamp())
-				record = {n:row[n] for n in COLUMNS}
-				records.append(record)
-
-			else:
-				continue
-
-	return records
-
-if not os.path.exists(ID_PATH):
-	open(ID_PATH, 'w').close()
+				row.update({"ip":ip, "port":port}) 
+				rec_que.put(row)

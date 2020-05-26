@@ -54,7 +54,8 @@ class WialonRetranslator(Retranslator):
 		logger.debug(f"Добавлен блок '{name}' (size {len(block)} bytes)\n{hexlify(block)}")
 
 
-	def send_record(self, conn, **data):
+	def pack_record(self, **data):
+		self.packet = bytes()
 		pdata = {key:data[key] for key in ['lon', 'lat', 'speed', 'direction', 'sat_num']}
 		self.add_template("header", imei=str(data["imei"]), tm=data['datetime'])
 		self.add_template("posinfo", **pdata)
@@ -65,7 +66,7 @@ class WialonRetranslator(Retranslator):
 		packet_size = struct.pack("<I", packet_size)
 		self.packet = packet_size + self.packet
 
-		return self.send(conn)
+		return self.packet
 
 
 class EGTS(Retranslator):
@@ -77,8 +78,8 @@ class EGTS(Retranslator):
 		port (int): порт получаетеля
 		"""
 
-		super().__init__("EGTS")
-		self.data = {"pid":1, "rid":1}
+		super().__init__("EgtsRetranslator")
+		self.data = {"pid": 0, "rid": 0}
 		self.authorized_imei = ''
 
 
@@ -115,10 +116,10 @@ class EGTS(Retranslator):
 		self.packet += packet + control_sum
 
 
-	def send_record(self, conn, **data):
+	def pack_record(self, **data):
+		self.packet = bytes()
 		if str(self.authorized_imei)!=str(data['imei']):
 			self.add_template("authentication", imei=str(data['imei']), time=int(time.time()))
-			rcode = self.send(conn)
 			self.authorized_imei = str(data['imei'])
 
 		rdata = {key:data[key] for key in ['lon', 'lat', 'speed', 'direction', 'sat_num', 'sensor', 'ignition', 'datetime']}
@@ -128,7 +129,7 @@ class EGTS(Retranslator):
 		rdata.update({"din": rdata['sensor']})
 		self.add_template("posinfo", **rdata)
 		
-		return self.send(conn)
+		return self.packet 
 
 
 	def handle_spd_and_dir(self, speed, dr):

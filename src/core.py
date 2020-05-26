@@ -1,6 +1,7 @@
 import os
 import struct
 import socket
+import threading
 
 from binascii import hexlify
 from time import time, sleep, mktime, strptime
@@ -13,106 +14,94 @@ from src.logs.log_config import logger
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S" #формат даты и времени (как в базе данных)
 
 
-class TCPConnection:
+class TCPConnections:
 
-	CONNECTION_ATTEMPTS = 50 #максимальное количество попыток соединиться с сервером
-	ATTEMPTS_DELAY = 10 #начальное кол-во секунд паузы
+	ATTEMPTS_DELAY = 15 #начальное кол-во секунд паузы между попытками присоединиться
+	CONNECTED = {}
+	NOT_CONNECTED = []
 
-	def __init__(self, dst_ip:str, dst_port:int):
-		"""Обеспечивает общение по TCP протоколу
+	@staticmethod
+	def connect_many(ipport_tuple):
+		for ip, port in ipport_tuple:
+			if TCPConnections.connect(ip, port):
+				TCPConnections.NOT_CONNECTED.append((ip, port))
 
-		dst_ip (str): ip адрес получателся
-		dst_port (int): порт получаетеля
-		"""
-		assert isinstance(dst_ip, str), 'Неправильно указан хост'
-		assert isinstance(dst_port, int), 'Неправильно указан порт'
+		if len(TCPConnections.NOT_CONNECTED):
+			err_msg = f'Не удалось установить соединение с [{len(TCPConnections.NOT_CONNECTED)}/{len(ipport_tuple)}] серверами:\n'
+			err_msg += '\n'.join([f"{ip}:{port}" for ip, port in TCPConnections.NOT_CONNECTED])+'\n'
+			logger.error(err_msg)
 
-		self.dst_ip = dst_ip
-		self.dst_port = dst_port
-		self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		self.connect(self.CONNECTION_ATTEMPTS)
-		self.server_answer = bytes()
-
-
-	def connect(self, attempts:int):
-		"""Устанавливает TCP соединение
-
-		attemps (int): кол-во попыток соединиться с получателем
-		"""
-		assert attempts>0
-
-		if attempts:
-			try:
-				self.socket.connect((self.dst_ip, self.dst_port))
-				self.make_log("info", 'Соединение установлено')
-
-			except Exception as e:
-				self.make_log("error", f'Не удалось установить соединение. Попытка №{self.CONNECTION_ATTEMPTS-attempts} ({e})')
-				sleeptime = min(abs(self.ATTEMPTS_DELAY*(self.CONNECTION_ATTEMPTS-attempts)**2), 10000)
-				print(sleeptime)
-				sleep(sleeptime)
-				self.connect(attempts-1)
-
-		else:
-			logger.critical('Невозможно установить соединение')
-			self.socket.close()
-			raise RuntimeError('Невозможно установить соединение')
+		connect_th = threading.Thread(target=TCPConnections.retry_connect)
+		connect_th.start()
 
 
-	def send(self, bmsg:bytes):
+	@staticmethod
+	def retry_connect():
+		t = 0
+		while True:
+			n = 0
+			for ip, port in TCPConnections.NOT_CONNECTED:
+				if not TCPConnections.connect(ip, port):
+					del(TCPConnections.NOT_CONNECTED[n])
+
+				n += 1
+
+			t += 1
+
+			sleeptime = min((TCPConnections.ATTEMPTS_DELAY)*t**2, 500)
+			sleep(sleeptime)
+
+
+	@staticmethod
+	def connect(ip, port):
+		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		sock.settimeout(2)
+
+		try:
+			sock.connect((ip, port))
+			TCPConnections.CONNECTED.update({f'{ip}:{port}':sock})
+			logger.info('Соединение установлено'+ f"\n[{ip}:{port}] ")
+			return 0
+
+		except Exception as e:
+			logger.debug('Не удалось установить соединение'+ f"\n[{ip}:{port}] ")
+			return -1
+
+
+	@staticmethod
+	def send(ip, port, bmsg:bytes):
 		"""Отправляет сообщение получателю
 
 		bmsg (bytes): сообщение в байтах
 		"""
 
-		#FIX: socket.recv блокирует поток, если ответа от сервера не поступило
-
 		assert isinstance(bmsg, bytes), 'Пакет данных дожен быть в байтовом формате'
-		try:
-			msglen = len(bmsg)
-			totalsent = 0
-			while totalsent < msglen:
-				sent = self.socket.send(bmsg[totalsent:])
-				if sent==0:
-					raise RuntimeError()
-				totalsent += sent
 
-			self.make_log("info", f'Пакет данных успешно отправлен (size {msglen} bytes)\n{hexlify(bmsg)}')
-			self.server_answer = self.socket.recv(1024)
-			self.make_log("info", f'Ответ сервера (size {len(self.server_answer)} bytes)\n{hexlify(self.server_answer)}')
-			return 0
+		sock = TCPConnections.CONNECTED.get(f'{ip}:{port}', '')
+		if sock:
+			try:
+				msglen = len(bmsg)
 
-		except Exception as e:
-			logger.critical(f"Ошибка при отправке данных ({e})")
+				sock.send(bmsg)
+				logger.debug(f'Пакет данных успешно отправлен (size {msglen} bytes)\n{hexlify(bmsg)}'+ f"\n[{ip}:{port}] ")
+				server_answer = sock.recv(1024)
+				logger.debug(f'Ответ сервера (size {len(server_answer)} bytes)\n{hexlify(server_answer)}'+ f"\n[{ip}:{port}] ")
+				return 0
+
+			except Exception as e:
+				sock_ind = TCPConnections.CONNECTED.index(f'{ip}:{port}')
+				del(TCPConnections.CONNECTED[sock_ind])
+				TCPConnections.NOT_CONNECTED.append((ip, port))
+				logger.critical(f"Ошибка при отправке данных ({e})"+ f"\n[{ip}:{port}] ")
+				return -1
+
+		else:
+			logger.error('Попытка отправить данные на неподключенный сервер'+ f"\n[{ip}:{port}] ")
 			return -1
 
 
-	def make_log(self, lvl:str, msg:str):
-		"""Дополняет информацию в логах
-
-		lvl (str): уровень сообщения
-		msg (str): сообщение
-
-		"""
-		if lvl=='info':
-			logger.info(msg + f"\n[{self.dst_ip}:{self.dst_port}] ")
-		elif lvl=='debug':
-			logger.debug(msg + f"\n[{self.dst_ip}:{self.dst_port}] ")
-		elif lvl=='critical':
-			logger.critical(msg + f"\n[{self.dst_ip}:{self.dst_port}] ")
-		elif lvl=='error':
-			logger.error(msg + f"\n[{self.dst_ip}:{self.dst_port}] ")
-		elif lvl=='warning':
-			logger.warning(msg + f"\n[{self.dst_ip}:{self.dst_port}] ")
-
-
-	def close(self):
-		self.socket.shutdown(socket.SHUT_RDWR)
-		self.make_log("info", "Соединение разорвано")
-		self.socket.close()	
-
 	def __repr__(self):
-		return f'TCPConnection on [{self.dst_ip}:{self.dst_port}]'
+		return f'TCPConnections (count={len(TCPConnections.CONNECTED.keys())})'
 
 	def __str__(self):
 		return self.__repr__()
@@ -147,40 +136,7 @@ class Retranslator:
 		if not os.path.exists(p):
 			os.makedirs(p)
 
-		logger.info(f"Протокол {protocol_name} инициализирован")
-
-
-	def send(self, conn):
-		"""
-		Перегруженный родительский метод отправки сообщения
-		
-		conn (TCPConnection)
-		"""
-
-		conn.make_log("info", f"Началась отправка пакета данных")
-		result_code = conn.send(self.packet)
-
-		if result_code:
-			conn.make_log("error", 'Потеряно соединение с сервером')
-			conn.socket.shutdown(socket.SHUT_RDWR)
-			conn.socket.close()
-			conn.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-			conn.connect(self.CONNECTION_ATTEMPTS)
-			result_code = conn.send(self.packet)
-
-			if result_code:
-				conn.make_log('critical', 'Пакет вызывает ошибку на сервере')
-
-		self.reset()
-		return result_code
-
-
-	def reset(self):
-		"""
-		Восстанавливает класс в исходное состояние
-		"""
-		self.packet = bytes()
-		logger.debug("Ретранслятор очищен от данных")
+		logger.info(f"Протокол {protocol_name} инициализирован\n")
 
 
 	def paste_data_into_params(self, p, data, formats):
