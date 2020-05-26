@@ -73,14 +73,14 @@ def sender():
 							if not RETRANSLATORS[ret_name].authorized_imei==str(row['imei']):
 								RETRANSLATORS[ret_name].add_template("authentication", imei=str(row['imei']), time=int(time.time()))
 								packet = RETRANSLATORS[ret_name].packet
-								if TCPConnections.send(tracker['ip'], tracker['port'], packet):
-									break
+								# if TCPConnections.send(tracker['ip'], tracker['port'], packet):
+								# 	break
 									
 								RETRANSLATORS[ret_name].packet = {}
 
 						packet = RETRANSLATORS[ret_name].pack_record(**record)
-						if TCPConnections.send(tracker['ip'], tracker['port'], packet):
-							break
+						# if TCPConnections.send(tracker['ip'], tracker['port'], packet):
+						# 	break
 
 						msg = "Отправлена запись\n"
 						msg += f"ip={tracker['ip']}\nport={tracker['port']}\n"

@@ -23,3 +23,5 @@ else:
 logger = logging.getLogger()
 logger.addHandler(handler)
 logger.setLevel(LEVEL)
+
+logger.info('RETRANSLATOR START\n\n\n\n')
