@@ -110,7 +110,6 @@ class TCPConnections:
 class Retranslator:
 
 	PROTOCOLS_DIR = "src/protocols/" #место где лежат json'ы с описанием протоколов
-	DATA_DIR = "src/protocols/data/" #место под данные
 
 	def __init__(self, protocol_name:str):
 		"""Родитель всех протоколов
