@@ -69,19 +69,12 @@ def check_records(connection, ip, port):
 		last_id = cursor.fetchone()['MAX(`id`)']
 		if last_id == None: last_id = 0
 
-	all_imei = []
-	for ret_name in RETRANSLATORS.keys():
-		with connection.cursor() as cursor:
-			query = f"SELECT `imei` FROM {ret_name.lower()} WHERE `ip`='{ip}' AND `port`={port}"
-			cursor.execute(query)
-
-			for i in cursor.fetchall():
-				all_imei.append(i['imei'])
+	all_imei = get_all_imei(connection, ip, port)
 
 	with connection.cursor() as cursor:
-		query = f"SELECT * FROM {RECORDS_TBL} WHERE `id`>{last_id} AND (imei={all_imei[0]}"
+		query = f"SELECT * FROM {RECORDS_TBL} WHERE `id`>{last_id} AND (`imei`={all_imei[0]}"
 		for imei in all_imei[1:]:
-			query += f' OR imei={imei}'
+			query += f' OR `imei`={imei}'
 
 		query += ')'
 		cursor.execute(query)
@@ -95,3 +88,16 @@ def check_records(connection, ip, port):
 		rowcount = cursor.rowcount
 		
 	return rowcount
+
+
+def get_all_imei(connection, ip, port):
+	all_imei = []
+	for ret_name in RETRANSLATORS.keys():
+		with connection.cursor() as cursor:
+			query = f"SELECT `imei` FROM {ret_name.lower()} WHERE `ip`='{ip}' AND `port`={port}"
+			cursor.execute(query)
+
+			for i in cursor.fetchall():
+				all_imei.append(i['imei'])
+
+	return all_imei

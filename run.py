@@ -8,12 +8,15 @@ def receiver():
 		ipport_tuple = get_ipports(connection)
 		TCPConnections.connect_many(ipport_tuple)
 
+		all_imei = []
 		connected = []
 		total_count = 0
 		for conn in TCPConnections.CONNECTED.keys():
 			ip, port = conn.split(':')
 			total_count += check_records(connection, ip, port)
 			connected.append(conn)
+			a_imei = get_all_imei(connection, ip, port)
+			all_imei.extend(a_imei)
 
 		logger.info(f"ИТОГО - {total_count} старых записей будут отправлены\n")
 
@@ -31,9 +34,15 @@ def receiver():
 					t_ip, t_port = tracker.split(':')
 					connected = [x for x in TCPConnections.CONNECTED.keys()]
 					check_records(connection, t_ip, t_port)
+					new_imei = get_all_imei(connection, t_ip, t_port)
+					all_imei.extend(new_imei)
 
 			with connection.cursor() as cursor:
-				query = f"SELECT * FROM {RECORDS_TBL} WHERE `id`>{from_id}"
+				query = f"SELECT * FROM {RECORDS_TBL} WHERE `id`>{from_id} AND (`imei`={all_imei[0]}"
+				for imei in all_imei[1:]:
+					query += f' OR `imei`={imei}'
+
+				query += ')'
 				cursor.execute(query)
 
 				logger.info(f'Найдено {cursor.rowcount} новых записей\n')
