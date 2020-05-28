@@ -74,7 +74,7 @@
 		"EGTS_RECORD_HEADER": {
 			"record_length":	  	 25,
 			"rid":		    	  	 "&rid",
-			"record_flags": 	  	 5,
+			"record_flags": 	  	 133,
 			"oid":					 "&imei[-6:]",
 			"time": 			 	 "&time",
 			"sourse_service_type":	 1,
@@ -89,7 +89,7 @@
 		"EGTS_SR_TERM_IDENTITY_RECORD": {
 			"tid":   "&imei[-6:]",
 			"flags": 66,
-			"imei":  "&imei",
+			"imei":  "&imei[-6:]",
 			"buf": 	 256
 		}
 	},
@@ -109,9 +109,9 @@
 		"EGTS_RECORD_HEADER": {
 			"record_length":	  	 31,
 			"rid":		    	  	 "&rid",
-			"record_flags": 	  	 5,
+			"record_flags": 	  	 133,
 			"oid":					 "&imei[-6:]",
-			"time": 		  	     "&datetime",
+			"time": 		  	     "&time",
 			"sourse_service_type":	 2,
 			"recipient_service_type":2
 		},

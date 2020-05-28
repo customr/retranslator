@@ -10,16 +10,18 @@ from src.retranslators import WialonRetranslator, EGTS
 from src.logs.log_config import logger
 
 
-HOST 		= 	'localhost'
-USER 		= 	'root'
-PASSWD 		=	'root'
-DB 			= 	'devices'
+HOST 		= 	'127.0.0.1'
+PORT 		=   3306
+USER 		= 	'retranslator'
+PASSWD 		=	'cMiOm1rZ'
+DB 			= 	'tracks'
 
 RECORDS_TBL = 	'geo_100'  	 #имя таблицы, в которую поступают записи
 DELAY 		= 	1.0   	 	 #через сколько секунд проверять бд на наличие новых записей
 
 CONN 		= 	{
 				"host"		 : 	HOST,
+				"port"		 :  PORT,
 				"user"		 : 	USER,
 				"password"	 : 	PASSWD,
 				"db"		 : 	DB,
@@ -31,19 +33,6 @@ RETRANSLATORS = {
 				'EgtsRetranslator'	: 	EGTS(),
 				'WialonRetranslator': 	WialonRetranslator(),
 				}
-
-COLUMNS 	= 	(
-				'id', 
-				'imei', 
-				'lat', 
-				'lon', 
-				'datetime', 
-				'speed', 
-				'direction',
-				'ignition',
-				'sensor',
-				'sat_num'
-				)
 
 
 rec_que = Queue()
@@ -101,3 +90,11 @@ def get_all_imei(connection, ip, port):
 				all_imei.append(i['imei'])
 
 	return all_imei
+
+
+def get_rec_from_to(connection, imei, from_dt, to_dt):
+	with connection.cursor() as cursor:
+		query = f"SELECT * FROM `{RECORDS_TBL}` WHERE `imei`='{imei}'"
+		query += f" AND `datetime`>'{from_dt}' AND `datetime`<'{to_dt}'"
+		cursor.execute(query)
+		return cursor.fetchall()

@@ -1,10 +1,11 @@
 import struct
 import time
 
+from datetime import datetime
 from binascii import hexlify, a2b_hex
 
 from src.logs.log_config import logger
-from src.core import Retranslator
+from src.core import Retranslator, TCPConnections
 from src.crc import crc8, crc16
 
 
@@ -38,17 +39,17 @@ class WialonRetranslator(Retranslator):
 		if name!='header':
 			fmt = self.protocol["FORMATS"]['blockheader']
 			data = self.protocol["PARAMS"]["blockheader"][name]
-			block += Retranslator.processing(fmt, data)
-
+			block += Retranslator.processing(fmt, data, '>')
+		
 		fmt = self.protocol["FORMATS"].get(name, '')
 		if fmt:
-			block += Retranslator.processing(fmt, params)
+			block += Retranslator.processing(fmt, params, '>')
 
 		else:
 			datatype = data.get('data_type', None)
 			if datatype:
 				datatype = self.DATATYPES[datatype]
-				block += Retranslator.pack_data(datatype, params.values())
+				block += Retranslator.pack_data(datatype, params.values(), '>')
 
 		self.packet += block
 		logger.debug(f"Добавлен блок '{name}' (size {len(block)} bytes)\n{hexlify(block)}")
@@ -80,7 +81,7 @@ class EGTS(Retranslator):
 
 		super().__init__("EgtsRetranslator")
 		self.data = {"pid": 0, "rid": 0}
-		self.authorized_imei = ''
+		self.auth_imei = ''
 
 
 	def add_template(self, action, **data):
@@ -118,15 +119,12 @@ class EGTS(Retranslator):
 
 	def pack_record(self, **data):
 		self.packet = bytes()
-		if str(self.authorized_imei)!=str(data['imei']):
-			self.add_template("authentication", imei=str(data['imei']), time=int(time.time()))
-			self.authorized_imei = str(data['imei'])
 
 		rdata = {key:data[key] for key in ['lon', 'lat', 'speed', 'direction', 'sat_num', 'sensor', 'ignition', 'datetime']}
 		rdata['lat'] = self.get_lat(rdata['lat'])
 		rdata['lon'] = self.get_lon(rdata['lon'])
 		rdata['datetime'] = self.get_egts_time(rdata['datetime'])
-		rdata.update({"din": rdata['sensor']})
+		rdata.update({"din": (rdata['sensor']<<1)+rdata['ignition']})
 		self.add_template("posinfo", **rdata)
 		
 		return self.packet 
@@ -158,7 +156,7 @@ class EGTS(Retranslator):
 
 	@staticmethod
 	def get_egts_time(tm):
-		egts_time = 1262289600 #timestamp 2010-01-01 00:00:00
+		egts_time = 1262300400 #timestamp 2010-01-01 00:00:00+GMT(4)
 
 		if isinstance(tm, str):
 			tm = Retranslator.get_timestamp(tm)
@@ -175,3 +173,37 @@ class EGTS(Retranslator):
 	@staticmethod
 	def get_lon(value):
 		return int((value/180) * 0xFFFFFFFF)
+
+
+class WialonIPS(Retranslator):
+
+	ASSOC = {
+		"authentication": "L",
+		"posinfo": "D"
+	}
+
+	@staticmethod
+	def pack_block(name, *data)
+		assoc = WialonIPS.ASSOC[name]
+		header, block = f"#{assoc}#", ''
+
+		block += ';'.join(data)
+		block += crc16(block)
+		block += '\r\n'
+
+		return block
+
+
+	@staticmethod
+	def send_record(ip, port, **data):
+		block = WialonIPS.pack_block('authentication', '2.0', str(data['imei']))
+		if TCPConnections.send(ip, port, block)!=b'#AL#1\r\n':
+			return -1
+
+		pdata = [str(data[x]) for x in ]
+		block = WialonIPS.pack_block('posinfo', *pdata)
+
+
+
+	@staticmethod
+	def handle_coord(lat, lon):

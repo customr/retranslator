@@ -67,38 +67,51 @@ class TCPConnections:
 			logger.debug('Не удалось установить соединение'+ f"\n[{ip}:{port}] ")
 			return -1
 
-
 	@staticmethod
-	def send(ip, port, bmsg:bytes):
-		"""Отправляет сообщение получателю
-
-		bmsg (bytes): сообщение в байтах
-		"""
-
-		assert isinstance(bmsg, bytes), 'Пакет данных дожен быть в байтовом формате'
-
-		sock = TCPConnections.CONNECTED.get(f'{ip}:{port}', '')
-		if sock:
-			try:
-				msglen = len(bmsg)
-
-				sock.send(bmsg)
-				logger.debug(f'Пакет данных успешно отправлен (size {msglen} bytes)\n{hexlify(bmsg)}'+ f"\n[{ip}:{port}] ")
-				server_answer = sock.recv(1024)
-				logger.debug(f'Ответ сервера (size {len(server_answer)} bytes)\n{hexlify(server_answer)}'+ f"\n[{ip}:{port}] ")
-				return 0
-
-			except Exception as e:
-				sock_ind = TCPConnections.CONNECTED.index(f'{ip}:{port}')
-				del(TCPConnections.CONNECTED[sock_ind])
-				TCPConnections.NOT_CONNECTED.append((ip, port))
-				logger.critical(f"Ошибка при отправке данных ({e})"+ f"\n[{ip}:{port}] ")
-				return -1
-
-		else:
-			logger.error('Попытка отправить данные на неподключенный сервер'+ f"\n[{ip}:{port}] ")
-			return -1
-
+    def send(ip, port, bmsg:bytes):
+        """Отправляет сообщение получателю
+ 
+        bmsg (bytes): сообщение в байтах
+        """
+ 
+        assert isinstance(bmsg, bytes), 'Пакет данных дожен быть в байтовом формате'
+ 
+        sock = TCPConnections.CONNECTED.get(f'{ip}:{port}', '')
+        if sock:
+            try:
+                msglen = len(bmsg)
+ 
+                sock.send(bmsg)
+                logger.debug(f'Пакет данных успешно отправлен (size {msglen} bytes)\n{hexlify(bmsg)}'+ f"\n[{ip}:{port}] ")
+                server_answer = sock.recv(1024)
+                logger.debug(f'Ответ сервера (size {len(server_answer)} bytes)\n{hexlify(server_answer)}'+ f"\n[{ip}:{port}] ")
+                return server_answer
+ 
+            except Exception as e:
+            	logger.critical(f"Ошибка при отправке данных ({e})"+ f"\n[{ip}:{port}] ")
+                del(TCPConnections.CONNECTED[f'{ip}:{port}'])
+                if not TCPConnections.connect(ip, port):
+                	sock = TCPConnections.CONNECTED.get(f'{ip}:{port}', '')
+                    try:
+                        sock.send(bmsg)
+                        logger.debug(f'Пакет данных успешно отправлен (size {msglen} bytes)\n{hexlify(bmsg)}'+ f"\n[{ip}:{port}] ")
+                        server_answer = sock.recv(1024)
+                        logger.debug(f'Ответ сервера (size {len(server_answer)} bytes)\n{hexlify(server_answer)}'+ f"\n[{ip}:{port}] ")
+                        return server_answer
+                   
+                    except Exception:
+                        TCPConnections.NOT_CONNECTED.append((ip, port))
+		                logger.info(f"Сервер [{ip}:{port}] добавлен в неподключенные\n")
+		                return -1  
+               	
+               	else:
+	                TCPConnections.NOT_CONNECTED.append((ip, port))
+	                logger.info(f"Сервер [{ip}:{port}] добавлен в неподключенные\n")
+	                return -1  
+ 
+        else:
+            logger.error('Попытка отправить данные на неподключенный сервер'+ f"\n[{ip}:{port}] ")
+            return -1
 
 	def __repr__(self):
 		return f'TCPConnections (count={len(TCPConnections.CONNECTED.keys())})'
@@ -221,7 +234,6 @@ class Retranslator:
 	def processing(fmt:dict, params:dict, endiannes=">"):
 		"""Обработчик
 		
-		Расставляет параметры в нужном порядке
 		Преобразует формат и параметры, вставляя нужные данные
 		Пакует данные в байты
 
@@ -231,6 +243,7 @@ class Retranslator:
 		"""
 		params = Retranslator.in_correct_order(fmt, params)
 		fmt, params = Retranslator.handler(''.join(fmt.values()), params)
+		logger.debug(f"{fmt} {params}")
 		block = Retranslator.pack_data(fmt, params, endiannes)
 		return block
 
