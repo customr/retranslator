@@ -16,7 +16,6 @@
 			"rid":			 	  	 "H",
 			"record_flags": 	  	 "B",
 			"oid":					 "I",
-			"time": 			  	 "I",
 			"sourse_service_type":	 "B",
 			"recipient_service_type":"B"
 		},
@@ -29,8 +28,7 @@
 		"EGTS_SR_TERM_IDENTITY_RECORD": {
 			"tid":   "I",
 			"flags": "B",
-			"imei":  "15s",
-			"buf": 	 "H"
+			"imei":  "15s"
 		},
 
 		"EGTS_SR_POS_DATA_RECORD": {
@@ -50,6 +48,16 @@
 		"EGTS_SR_EXT_POS_DATA_RECORD": {
 			"flags": 	"B",
 			"sat_num": 	"B"
+		},
+		
+		"EGTS_SR_RECORD_RESPONSE": {
+			"CRN":	"H",
+			"RST":	"B"
+		},
+		
+		"EGTS_PT_RESPONSE": {
+			"RPID":	"H",
+			"PR":	"B"
 		}
 	},
 
@@ -66,31 +74,29 @@
 			"flags": 			0,
 			"header_length": 	11,
 			"header_encoding": 	0,
-			"frame_data_length":40,
+			"frame_data_length":34,
 			"pid": 				"&pid",
 			"packet_type": 		1
 		},
 
 		"EGTS_RECORD_HEADER": {
-			"record_length":	  	 25,
+			"record_length":	  	 23,
 			"rid":		    	  	 "&rid",
-			"record_flags": 	  	 133,
+			"record_flags": 	  	 129,
 			"oid":					 "&imei[-6:]",
-			"time": 			 	 "&time",
 			"sourse_service_type":	 1,
 			"recipient_service_type":1
 		},
 
 		"EGTS_SUBRECORD_HEADER": {
 			"type":  1,
-			"length":22
+			"length":20
 		},
 
 		"EGTS_SR_TERM_IDENTITY_RECORD": {
 			"tid":   "&imei[-6:]",
-			"flags": 66,
-			"imei":  "&imei[-6:]",
-			"buf": 	 256
+			"flags": 2,
+			"imei":  "&imei[-6:]"
 		}
 	},
 
@@ -101,7 +107,7 @@
 			"flags": 			0,
 			"header_length": 	11,
 			"header_encoding": 	0,
-			"frame_data_length":46,
+			"frame_data_length":42,
 			"pid": 				"&pid",
 			"packet_type": 		1
 		},
@@ -109,9 +115,8 @@
 		"EGTS_RECORD_HEADER": {
 			"record_length":	  	 31,
 			"rid":		    	  	 "&rid",
-			"record_flags": 	  	 133,
+			"record_flags": 	  	 129,
 			"oid":					 "&imei[-6:]",
-			"time": 		  	     "&time",
 			"sourse_service_type":	 2,
 			"recipient_service_type":2
 		},
@@ -143,6 +148,29 @@
 		"EGTS_SR_EXT_POS_DATA_RECORD": {
 			"flags": 	8,
 			"sat_num": 	"&sat_num"
+		}
+	},
+	
+	"re_auth": {
+		"EGTS_PACKET_HEADER": {
+			"protocol_version": 1,
+			"security_key_id": 	0,
+			"flags": 			0,
+			"header_length": 	11,
+			"header_encoding": 	0,
+			"frame_data_length":6,
+			"pid": 				"&pid",
+			"packet_type": 		0
+		},
+		
+		"EGTS_PT_RESPONSE": {
+			"RPID": "&rpid",
+			"PR":	0
+		},
+		
+		"EGTS_SR_RECORD_RESPONSE": {
+			"CRN":	"&rrid",
+			"RST": 	0
 		}
 	}
 }

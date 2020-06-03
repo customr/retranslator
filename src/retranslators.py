@@ -1,7 +1,6 @@
 import struct
 import time
 
-from datetime import datetime
 from binascii import hexlify, a2b_hex
 
 from src.logs.log_config import logger
@@ -25,6 +24,15 @@ class WialonRetranslator(Retranslator):
 		https://gurtam.com/hw/files/Wialon%20Retranslator_v1.pdf
 		"""
 		super().__init__("WialonRetranslator")
+		
+	
+	def send(self, ip, port, row):
+		packet = self.pack_record(**row)
+		response = TCPConnections.send(ip, port, packet)
+		if response==b'11':
+			return 1
+		
+		return 0
 
 
 	def add_template(self, name, **params):
@@ -49,7 +57,9 @@ class WialonRetranslator(Retranslator):
 			datatype = data.get('data_type', None)
 			if datatype:
 				datatype = self.DATATYPES[datatype]
-				block += Retranslator.pack_data(datatype, params.values(), '>')
+				endiannes = ">"
+				if datatype=='d': endiannes='<'
+				block += Retranslator.pack_data(datatype, params.values(), endiannes)
 
 		self.packet += block
 		logger.debug(f"Добавлен блок '{name}' (size {len(block)} bytes)\n{hexlify(block)}")
@@ -62,6 +72,7 @@ class WialonRetranslator(Retranslator):
 		self.add_template("posinfo", **pdata)
 		self.add_template("ign", ign=data["ignition"])
 		self.add_template('sens', sens=data["sensor"])
+		self.add_template('temp', temp=data["temp"])
 
 		packet_size = len(self.packet)
 		packet_size = struct.pack("<I", packet_size)
@@ -80,13 +91,53 @@ class EGTS(Retranslator):
 		"""
 
 		super().__init__("EgtsRetranslator")
-		self.data = {"pid": 0, "rid": 0}
+		self.data = {"pid":0, "rid":0}
 		self.auth_imei = ''
+
+
+	def send(self, ip, port, row):
+		if row['imei']!=self.auth_imei:
+			self.packet = bytes()
+			self.add_template("authentication", imei=str(row['imei']))
+			if TCPConnections.send(ip, port, self.packet)==-1:
+				return 0
+			
+			self.auth_imei = str(row['imei'])
+			
+		rec_packet = self.pack_record(**row)
+		response = TCPConnections.send(ip, port, rec_packet)
+		if response==-1:
+			return 0
+
+		if response[-6:-4]==b'00':
+			return 1
+			
+		elif response[-6:-4]==b'99':
+			TCPConnections.close_conn(ip, port)
+			TCPConnections.connect(ip, port)
+				
+			self.packet = bytes()
+			self.add_template("authentication", imei=str(row['imei']))
+			if TCPConnections.send(ip, port, self.packet)==-1:
+				return 0
+			
+			self.auth_imei = str(row['imei'])
+			response = TCPConnections.send(ip, port, rec_packet)
+			if response[-6:-4]==b'00':
+				return 1
+			
+			else:
+				return 0
+		else:
+			return 0
 
 
 	def add_template(self, action, **data):
 		assert action in self.protocol.keys(), 'Неизвестное имя добавляемого шаблона'
-
+		
+		if data.get('datetime', None):	
+			data['datetime'] = self.get_egts_time(data['datetime'])
+			
 		if action=='posinfo':
 			self.handle_spd_and_dir(data['speed'], data['direction'])
 			self.handle_posflags(data['ignition'])
@@ -123,8 +174,7 @@ class EGTS(Retranslator):
 		rdata = {key:data[key] for key in ['lon', 'lat', 'speed', 'direction', 'sat_num', 'sensor', 'ignition', 'datetime']}
 		rdata['lat'] = self.get_lat(rdata['lat'])
 		rdata['lon'] = self.get_lon(rdata['lon'])
-		rdata['datetime'] = self.get_egts_time(rdata['datetime'])
-		rdata.update({"din": (rdata['sensor']<<1)+rdata['ignition']})
+		rdata.update({"din": rdata['sensor']})
 		self.add_template("posinfo", **rdata)
 		
 		return self.packet 
@@ -132,6 +182,7 @@ class EGTS(Retranslator):
 
 	def handle_spd_and_dir(self, speed, dr):
 		speed *= 10
+		dr = 0
 		self.data.update({"spd": speed, "dir": dr})
 
 
@@ -156,13 +207,13 @@ class EGTS(Retranslator):
 
 	@staticmethod
 	def get_egts_time(tm):
-		egts_time = 1262300400 #timestamp 2010-01-01 00:00:00+GMT(4)
+		egts_time = time.strptime("2010-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
+		egts_time = time.mktime(egts_time)
 
 		if isinstance(tm, str):
 			tm = Retranslator.get_timestamp(tm)
 
-		tm = int(tm)
-		return tm-egts_time
+		return int(tm-egts_time)
 
 
 	@staticmethod
@@ -173,37 +224,3 @@ class EGTS(Retranslator):
 	@staticmethod
 	def get_lon(value):
 		return int((value/180) * 0xFFFFFFFF)
-
-
-class WialonIPS(Retranslator):
-
-	ASSOC = {
-		"authentication": "L",
-		"posinfo": "D"
-	}
-
-	@staticmethod
-	def pack_block(name, *data)
-		assoc = WialonIPS.ASSOC[name]
-		header, block = f"#{assoc}#", ''
-
-		block += ';'.join(data)
-		block += crc16(block)
-		block += '\r\n'
-
-		return block
-
-
-	@staticmethod
-	def send_record(ip, port, **data):
-		block = WialonIPS.pack_block('authentication', '2.0', str(data['imei']))
-		if TCPConnections.send(ip, port, block)!=b'#AL#1\r\n':
-			return -1
-
-		pdata = [str(data[x]) for x in ]
-		block = WialonIPS.pack_block('posinfo', *pdata)
-
-
-
-	@staticmethod
-	def handle_coord(lat, lon):

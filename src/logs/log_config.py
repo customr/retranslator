@@ -5,7 +5,7 @@ from logging.handlers import RotatingFileHandler
 
 sys.stderr = open('src/logs/history.log', 'a')
 
-LEVEL = logging.INFO
+LEVEL = logging.DEBUG
 frt = logging.Formatter('%(levelname)s :: %(message)s %(asctime)s\n'+'-'*15)
 
 logger = logging.getLogger()

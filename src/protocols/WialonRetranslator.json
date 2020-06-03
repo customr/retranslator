@@ -60,9 +60,9 @@
 
 			"temp": {
 				"block_type": 	3003,
-				"block_size": 	11,
+				"block_size": 	15,
 				"reserved_attr":0,
-				"data_type": 	3,
+				"data_type": 	4,
 				"block_name": 	"temp"
 			}
 		}

@@ -1,3 +1,4 @@
 __pycache__
 *.log*
 utils.py
+test.py
