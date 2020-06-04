@@ -3,7 +3,6 @@ import sys
 from logging.handlers import RotatingFileHandler
 
 
-sys.stderr = open('src/logs/history.log', 'a')
 
 LEVEL = logging.DEBUG
 frt = logging.Formatter('%(levelname)s :: %(message)s %(asctime)s\n'+'-'*15)

@@ -150,7 +150,7 @@ class Retranslator:
 		logger.info(f"Протокол {protocol_name} инициализирован\n")
 
 
-	def paste_data_into_params(self, p, data, formats):
+	def paste_data_into_params(self, p, data, formats=None):
 		"""
 		Знак "&" в значении параметра json означает ссылку на переменную
 		после этого знака следует написать имя параметра, который вы передали в класс
@@ -190,8 +190,9 @@ class Retranslator:
 						params[n], slc = params[n].split("[")
 						slc = slc[:-1]
 
-						if find_format(n)!=find_format(params[n]):
-							other_format = True #формат исходной переменной несовпадает с требуемым форматом
+						if formats:
+							if find_format(n)!=find_format(params[n]):
+								other_format = True #формат исходной переменной несовпадает с требуемым форматом
 
 					if params[n] in data.keys():
 						params[n] = data[params[n]]
@@ -214,19 +215,20 @@ class Retranslator:
 							logger.critical(error_msg)
 							raise KeyError(error_msg)
 
-					if other_format:
-						fmt = formats[n]
-						#согласно обозначениям типов struct
-						if fmt in 'hHiIqQnN':
-							params[n] = int(params[n])
-						elif fmt in 'efd':
-							params[n] = float(params[n])
-						elif fmt in 'cbBsp':
-							params[n] = bytes(str(params[n]).encode('ascii'))
-						else:
-							error_msg = f"Ошибка в типе данных '{params[n]} : {fmt}'"
-							logger.critical(error_msg)
-							raise ValueError(error_msg)
+					if formats:
+						if other_format:
+							fmt = formats[n]
+							#согласно обозначениям типов struct
+							if fmt in 'hHiIqQnN':
+								params[n] = int(params[n])
+							elif fmt in 'efd':
+								params[n] = float(params[n])
+							elif fmt in 'cbBsp':
+								params[n] = bytes(str(params[n]).encode('ascii'))
+							else:
+								error_msg = f"Ошибка в типе данных '{params[n]} : {fmt}'"
+								logger.critical(error_msg)
+								raise ValueError(error_msg)
 
 			else:
 				continue

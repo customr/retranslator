@@ -48,16 +48,6 @@
 		"EGTS_SR_EXT_POS_DATA_RECORD": {
 			"flags": 	"B",
 			"sat_num": 	"B"
-		},
-		
-		"EGTS_SR_RECORD_RESPONSE": {
-			"CRN":	"H",
-			"RST":	"B"
-		},
-		
-		"EGTS_PT_RESPONSE": {
-			"RPID":	"H",
-			"PR":	"B"
 		}
 	},
 
@@ -148,29 +138,6 @@
 		"EGTS_SR_EXT_POS_DATA_RECORD": {
 			"flags": 	8,
 			"sat_num": 	"&sat_num"
-		}
-	},
-	
-	"re_auth": {
-		"EGTS_PACKET_HEADER": {
-			"protocol_version": 1,
-			"security_key_id": 	0,
-			"flags": 			0,
-			"header_length": 	11,
-			"header_encoding": 	0,
-			"frame_data_length":6,
-			"pid": 				"&pid",
-			"packet_type": 		0
-		},
-		
-		"EGTS_PT_RESPONSE": {
-			"RPID": "&rpid",
-			"PR":	0
-		},
-		
-		"EGTS_SR_RECORD_RESPONSE": {
-			"CRN":	"&rrid",
-			"RST": 	0
 		}
 	}
 }

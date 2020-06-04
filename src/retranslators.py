@@ -1,11 +1,12 @@
 import struct
 import time
 
+from datetime import datetime
 from binascii import hexlify, a2b_hex
 
 from src.logs.log_config import logger
 from src.core import Retranslator, TCPConnections
-from src.crc import crc8, crc16
+from src.crc import crc8, crc16, crc16_arc
 
 
 class WialonRetranslator(Retranslator):
@@ -224,3 +225,99 @@ class EGTS(Retranslator):
 	@staticmethod
 	def get_lon(value):
 		return int((value/180) * 0xFFFFFFFF)
+
+
+class WialonIPS(Retranslator):
+	def __init__(self):
+		"""WialonIPS протокол
+		http://extapi.wialon.com/hw/cfg/Wialon%20IPS_v_2_0.pdf
+		"""
+		super().__init__("WialonIPS")
+		self.auth_imei = ''
+
+
+	def send(self, ip, port, row):
+		if str(row['imei'])!=self.auth_imei:
+			packet = self.add_block('authentication', imei=str(row['imei']))
+			response = TCPConnections.send(ip, port, packet)
+			if response==-1:
+				return 0, 0
+
+			else:
+				response = str(a2b_hex(response))
+				response = response.split('#')[2][:-1].rstrip('\\r\\n')
+				if response!='1':
+					return 0, response
+
+		packet = self.add_block('posinfo', **row)
+		response = TCPConnections.send(ip, port, packet)
+
+		if response==-1:
+			return 0, 0
+
+		else:
+			response = str(a2b_hex(response))
+			response = response.split('#')[2][:-1].rstrip('\\r\\n')
+			if response!='1':
+				return 0, response
+			else:
+				return 1, response
+
+
+	def add_block(self, name, **data):
+		"""
+		Добавляет часть пакета описанную в json
+
+		name (str): имя блока
+		data (kwargs): параметры в соотвествии с выбранным блоком 
+		"""
+
+		symbol, params = self.protocol[name]
+		if name=='posinfo':
+			data = self.handle_data(data)
+		params = self.paste_data_into_params(params, data)
+
+		header = f"#{symbol}#"
+		block = ';'.join(list(map(str, params.values())))+';'
+		crc = str(hex(crc16_arc(bytes(block.encode('ascii')))))[2:].upper()
+		block = header + block + crc + '\r\n'
+		block = bytes(block.encode('ascii'))
+
+		return block
+		
+
+	@staticmethod
+	def handle_data(data):
+		dt = datetime.fromtimestamp(data['datetime'])
+		date = dt.strftime("%d%m%Y")
+		time = dt.strftime("%H%M%S")
+
+		params = f"ign:1:{data['ignition']}"
+		params += f",sens:1:{data['sensor']}"
+		params += f",temp:2:{data['temp']}"
+
+		lon1 = int(data['lon'])
+		lon1 = lon1*100 + (data['lon']%1)*60
+		lon1 = '0'*(4-len(str(int(lon1)))) + str(lon1)
+
+		lat1 = int(data['lat'])
+		lat1 = lat1*100 + (data['lat']%1)*60
+		lat1 = '0'*(5-len(str(int(lat1)))) + str(lat1)
+
+		lon2 = 'N'
+		lat2 = 'E'
+
+		data.update({
+			"date": date, 
+			"time": time,
+			"lon1": lon1,
+			"lon2": lon2,
+			"lat1": lat1,
+			"lat2": lat2,
+			"params":params
+			})
+
+		return data
+
+
+

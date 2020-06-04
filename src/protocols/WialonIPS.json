@@ -1,3 +1,30 @@
 {
-	
+	"authentication": [
+		"L", {
+			"version":	2.0,
+			"imei": 	"&imei",
+			"password":	"NA"
+		}
+	],
+
+	"posinfo": [
+		"D", {
+			"date":		"&date",
+			"time":		"&time",
+			"lon1":		"&lon1",
+			"lon2":		"&lon2",
+			"lat1":		"&lat1",
+			"lat2":		"&lat2",
+			"speed":	"&speed",
+			"course":	"&direction",
+			"alt":		"NA",
+			"sat_n":	"&sat_num",
+			"HDOP":		"NA",
+			"inputs":	"NA",
+			"outputs":	"NA",
+			"ADC":		"NA",
+			"key":		"NA",
+			"params":	"&params"
+		}
+	]
 }
