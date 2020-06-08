@@ -16,6 +16,7 @@
 			"rid":			 	  	 "H",
 			"record_flags": 	  	 "B",
 			"oid":					 "I",
+			"time":					 "I",
 			"sourse_service_type":	 "B",
 			"recipient_service_type":"B"
 		},
@@ -48,6 +49,16 @@
 		"EGTS_SR_EXT_POS_DATA_RECORD": {
 			"flags": 	"B",
 			"sat_num": 	"B"
+		},
+		
+		"EGTS_SR_RECORD_RESPONSE": {
+			"CRN":	"H",
+			"RST":	"B"
+		},
+		
+		"EGTS_PT_RESPONSE": {
+			"RPID":	"H",
+			"PR":	"B"
 		}
 	},
 
@@ -64,7 +75,7 @@
 			"flags": 			0,
 			"header_length": 	11,
 			"header_encoding": 	0,
-			"frame_data_length":34,
+			"frame_data_length":38,
 			"pid": 				"&pid",
 			"packet_type": 		1
 		},
@@ -72,8 +83,9 @@
 		"EGTS_RECORD_HEADER": {
 			"record_length":	  	 23,
 			"rid":		    	  	 "&rid",
-			"record_flags": 	  	 129,
+			"record_flags": 	  	 133,
 			"oid":					 "&imei[-6:]",
+			"time":					 "&datetime",
 			"sourse_service_type":	 1,
 			"recipient_service_type":1
 		},
@@ -86,7 +98,7 @@
 		"EGTS_SR_TERM_IDENTITY_RECORD": {
 			"tid":   "&imei[-6:]",
 			"flags": 2,
-			"imei":  "&imei[-6:]"
+			"imei":  "&imei"
 		}
 	},
 
@@ -97,7 +109,7 @@
 			"flags": 			0,
 			"header_length": 	11,
 			"header_encoding": 	0,
-			"frame_data_length":42,
+			"frame_data_length":46,
 			"pid": 				"&pid",
 			"packet_type": 		1
 		},
@@ -105,8 +117,9 @@
 		"EGTS_RECORD_HEADER": {
 			"record_length":	  	 31,
 			"rid":		    	  	 "&rid",
-			"record_flags": 	  	 129,
+			"record_flags": 	  	 133,
 			"oid":					 "&imei[-6:]",
+			"time":					 "&datetime",
 			"sourse_service_type":	 2,
 			"recipient_service_type":2
 		},
@@ -138,6 +151,29 @@
 		"EGTS_SR_EXT_POS_DATA_RECORD": {
 			"flags": 	8,
 			"sat_num": 	"&sat_num"
+		}
+	},
+	
+	"re_auth": {
+		"EGTS_PACKET_HEADER": {
+			"protocol_version": 1,
+			"security_key_id": 	0,
+			"flags": 			0,
+			"header_length": 	11,
+			"header_encoding": 	0,
+			"frame_data_length":6,
+			"pid": 				"&pid",
+			"packet_type": 		0
+		},
+		
+		"EGTS_PT_RESPONSE": {
+			"RPID": "&rpid",
+			"PR":	0
+		},
+		
+		"EGTS_SR_RECORD_RESPONSE": {
+			"CRN":	"&rrid",
+			"RST": 	0
 		}
 	}
 }

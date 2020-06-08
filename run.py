@@ -26,7 +26,7 @@ def receiver():
 				cursor.execute(query)
 				from_id = cursor.fetchone()['MAX(`id`)']
 
-			send_th.start()
+			send_th_1.start()
 			while True:
 				if len(TCPConnections.CONNECTED.keys())>len(connected):
 					new = list(set(TCPConnections.CONNECTED.keys())-set(connected))
@@ -47,7 +47,7 @@ def receiver():
 						query += f' OR `imei`={imei}'
 
 					query += ')'
-					query += " ORDER BY `imei`, `datetime`"
+					query += " ORDER BY `ts`"
 					cursor.execute(query)
 					
 					not_emp = 0
@@ -83,7 +83,7 @@ def sender():
 		try:
 			while True:
 				row = rec_que.get()
-				send_row(connection, row)			
+				send_row(connection, row)
 				rec_que.task_done()
 		
 		except Exception as e:
@@ -92,12 +92,12 @@ def sender():
 
 def check_log_size():
 	while True:
-		if (os.path.getsize('src/logs/history.log')/1024) > 1024:
+		if (os.path.getsize('src/logs/history.log')/1024) > 1024*10:
 			open('src/logs/history.log', 'w').close()
 		
 		time.sleep(60*60*5)
 
 
 recv_th = threading.Thread(target=receiver).start()
-send_th = threading.Thread(target=sender)
+send_th_1 = threading.Thread(target=sender)
 cls_th  = threading.Thread(target=check_log_size).start()

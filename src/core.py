@@ -37,20 +37,16 @@ class TCPConnections:
 
 	@staticmethod
 	def retry_connect():
-		t = 0
 		while True:
 			try:
 				n = 0
 				for ip, port in TCPConnections.NOT_CONNECTED:
-					if TCPConnections.connect(ip, port)!=-1:
+					if TCPConnections.connect(ip, int(port))!=-1:
 						del(TCPConnections.NOT_CONNECTED[n])
 
 					n += 1
 
-				t += 1
-
-				sleeptime = min((TCPConnections.ATTEMPTS_DELAY)*t**2, 600)
-				sleep(sleeptime)
+				sleep(30)
 			
 			except Exception as e:
 				logger.error(f"Ошибка в функции переподключения ({e})")
@@ -80,7 +76,7 @@ class TCPConnections:
 			return sock
 
 		except Exception as e:
-			logger.debug('Не удалось установить соединение'+ f"\n[{ip}:{port}] ")
+			logger.debug(f'Не удалось установить соединение ({e})'+ f"\n[{ip}:{port}] ")
 			return -1
 
 
@@ -189,7 +185,7 @@ class Retranslator:
 					if slc:
 						params[n], slc = params[n].split("[")
 						slc = slc[:-1]
-
+						
 						if formats:
 							if find_format(n)!=find_format(params[n]):
 								other_format = True #формат исходной переменной несовпадает с требуемым форматом
@@ -214,7 +210,7 @@ class Retranslator:
 							error_msg = f"Неправильно указан срез параметра {params[n]}[{l_slc}:{r_slc}]"
 							logger.critical(error_msg)
 							raise KeyError(error_msg)
-
+					
 					if formats:
 						if other_format:
 							fmt = formats[n]
@@ -294,12 +290,31 @@ class Retranslator:
 
 		packet = bytes()
 
-		try:
-			packet += struct.pack(endiannes+fmt, *params)
+		if (('d' in fmt) or ('D' in fmt)) and len(fmt)>1:
+			doubles = []
+			f_parts = fmt.split("d")
 
-		except Exception as e:
-			logger.critical(f'Ошибка в запаковке данных {fmt} - {params} ({e})')
-			raise e
+			for param in params:
+				if isinstance(param, float):
+					doubles.append(param)
+
+			for n, part in enumerate(f_parts[:-1]):
+				ind = params.index(doubles[n])
+
+				packet += struct.pack(endiannes+part, *params[:ind])
+				packet += struct.pack("<d", doubles[n])
+
+				del(params[:ind+1])
+
+			packet += struct.pack(endiannes+f_parts[-1], *params)
+
+		else:
+			try:
+				packet += struct.pack(endiannes+fmt, *params)
+
+			except Exception as e:
+				logger.critical(f'Ошибка в запаковке данных {fmt} - {params} ({e})')
+				raise e
 
 		return packet
 

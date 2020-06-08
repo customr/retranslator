@@ -8,18 +8,18 @@ from queue import Queue
 from datetime import datetime, timezone
 
 from src.core import TCPConnections
-from src.retranslators import WialonRetranslator, EGTS
+from src.retranslators import WialonRetranslator, EGTS, WialonIPS
 from src.logs.log_config import logger
 
 
 HOST 		= 	'127.0.0.1'
 PORT 		=   3306
-USER 		= 	'root'
-PASSWD 		=	'root'
-DB 			= 	'devices'
+USER 		= 	'retranslator'
+PASSWD 		=	'cMiOm1rZ'
+DB 			= 	'tracks'
 
 RECORDS_TBL = 	'geo_100'  	 #имя таблицы, в которую поступают записи
-DELAY 		= 	1.0   	 	 #через сколько секунд проверять бд на наличие новых записей
+DELAY 		= 	3.0   	 	 #через сколько секунд проверять бд на наличие новых записей
 
 CONN 		= 	{
 				"host"		 : 	HOST,
@@ -32,8 +32,9 @@ CONN 		= 	{
 				}
 
 RETRANSLATORS = {
-				'EgtsRetranslator'	: 	EGTS(),
-				'WialonRetranslator': 	WialonRetranslator(),
+				'WialonIPSRetranslator'	:	WialonIPS(),
+				'EgtsRetranslator'		: 	EGTS(),
+				'WialonRetranslator'	: 	WialonRetranslator(),
 				}
 
 
@@ -70,7 +71,7 @@ def check_records(connection, ip, port):
 
 		with connection.cursor() as cursor:
 			query = f"SELECT * FROM {RECORDS_TBL} WHERE `id`>{last_id} AND `imei`={imei}"
-			query += " ORDER BY `datetime`"
+			query += " ORDER BY `ts`"
 			cursor.execute(query)
 
 			logger.info(f'Найдено {cursor.rowcount} записей для {imei} [{ip}:{port}]\n')
@@ -123,36 +124,37 @@ def send_row(connection, row):
 	row['lat'] = float(row['lat'])
 	
 	retranslators = []
+	trackers = {}
 	for ret_name in RETRANSLATORS.keys():
 		with connection.cursor() as cursor:
-			query = f'SELECT * FROM {ret_name.lower()} WHERE `imei`={row["imei"]}'
+			query = f'SELECT * FROM `{ret_name.lower()}` WHERE `imei`={row["imei"]}'
 			cursor.execute(query)
-			if cursor.rowcount!=0:
+			if cursor.rowcount>0:
 				retranslators.append(ret_name)
-				
+				trackers.update({ret_name: cursor.fetchall()})
+	
 	for ret_name in retranslators:
-		if not row.get('ip', ''):
-			with connection.cursor() as cursor:
-				query = f'SELECT * FROM {ret_name.lower()} WHERE `imei`={row["imei"]}'
-				cursor.execute(query)
-				trackers = cursor.fetchall()
-
-		else:
-			trackers = [{"ip":row['ip'], "port":row["port"]}]
-
-		for tracker in trackers:
+		for tracker in trackers[ret_name]:
 			tn = f"{tracker['ip']}:{tracker['port']}"
 			if TCPConnections.CONNECTED.get(tn, ''):
-				#sended = RETRANSLATORS[ret_name].send(tracker['ip'], tracker['port'], row)
-				sended = 1
+				tm = time.time()
+				sended, status = RETRANSLATORS[ret_name].send(tracker['ip'], tracker['port'], row)
+				
 				if sended:
 					msg = "Запись ОТПРАВЛЕНА\n"
 				else:
 					msg = "Запись НЕ ОТПРАВЛЕНА\n"
-					
-				msg += f"ip={tracker['ip']}\nport={tracker['port']}\n"
-				msg += f"ret_type={ret_name}\nrow_id={row['id']}\nimei={row['imei']}\n"
-				msg += f"datetime={datetime.fromtimestamp(row['datetime'])}\n"
+				
+				elapsed_time = time.time()-tm
+				msg += "server".ljust(13, ' ')+f"{tracker['ip']}:"+f"{tracker['port']}\n"
+				msg += "ret_type".ljust(13, ' ')+f"{ret_name}\n"
+				msg += "row_id".ljust(13, ' ')+f"{row['id']}\n"
+				msg += "imei".ljust(13, ' ')+f"{row['imei']}\n"
+				msg += "datetime".ljust(13, ' ')+f"{datetime.fromtimestamp(row['datetime'])}\n"
+				msg += "status".ljust(13, ' ')+f"{status}\n"
+				msg += "elapsed_time".ljust(13, ' ')+"{:.2f}\n".format(elapsed_time)
+				msg += "seconds_left".ljust(13, ' ')+f"{int(elapsed_time*rec_que.qsize())}\n"
+				msg += "rows_left".ljust(13, ' ')+f"{rec_que.qsize()}\n"
 				
 				
 				if not sended:
