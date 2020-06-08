@@ -2,9 +2,9 @@ import logging
 import sys
 from logging.handlers import RotatingFileHandler
 
+sys.stderr = open('src/logs/history.log', 'a')
 
-
-LEVEL = logging.DEBUG
+LEVEL = logging.INFO
 frt = logging.Formatter('%(levelname)s :: %(message)s %(asctime)s\n'+'-'*15)
 
 logger = logging.getLogger()

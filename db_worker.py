@@ -109,6 +109,16 @@ def utc_to_local(utc_dt):
     return utc_dt.replace(tzinfo=timezone.utc).astimezone(tz=None)
 
 
+def get_rec_from_to(connection, imei, frm, to):
+	with connection.cursor() as cursor:
+		query = f"SELECT * FROM {RECORDS_TBL} WHERE `imei`={imei}"
+		query += f" AND `datetime`>{frm} AND `datetime`<{to}"
+		cursor.execute(query)
+		rows = cursor.fetchall()
+
+	return rows
+
+
 def send_row(connection, row):
 	row['imei'] = str(row['imei'])
 	row['reserve'] = loads('{'+row['reserve']+'}')
