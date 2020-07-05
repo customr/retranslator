@@ -3,6 +3,7 @@ import struct
 import socket
 import threading
 
+from datetime import datetime, timezone
 from binascii import hexlify
 from time import time, sleep, mktime, strptime
 from json import load
@@ -55,14 +56,17 @@ class TCPConnections:
 	@staticmethod
 	def close_conn(ip, port):
 		ind = f"{ip}:{port}"
-		try:
-			TCPConnections.CONNECTED[ind].shutdown(socket.SHUT_RDWR)
-			TCPConnections.CONNECTED[ind].close()
-			del(TCPConnections.CONNECTED[ind])
+		if ind in TCPConnections.CONNECTED.keys():
+			try:
+				TCPConnections.CONNECTED[ind].shutdown(socket.SHUT_RDWR)
+				TCPConnections.CONNECTED[ind].close()
+				del(TCPConnections.CONNECTED[ind])
+			
+			except Exception as e:
+				logger.error(f"Не удалось закрыть соединение ({e})")
 		
-		except Exception as e:
-			logger.error(f"Не удалось закрыть соединение ({e})")
-
+		else:
+			logger.error(f"Попытка закрыть неустановленное соединение {ind}")
 
 	@staticmethod
 	def connect(ip, port):
@@ -103,9 +107,13 @@ class TCPConnections:
 
 			except Exception as e:
 				logger.critical(f"Ошибка при отправке данных ({e})"+ f"\n[{ip}:{port}] ")
-				TCPConnections.close_conn(ip, port)
-				TCPConnections.NOT_CONNECTED.append((ip, port))
-				logger.info(f"Сервер [{ip}:{port}] добавлен в неподключенные")
+				if (ip, port) not in TCPConnections.NOT_CONNECTED:
+					if TCPConnections.CONNECTED.get(f"{ip}:{port}", None):
+						TCPConnections.close_conn(ip, port)
+						
+					TCPConnections.NOT_CONNECTED.append((ip, port))
+					logger.info(f"Сервер [{ip}:{port}] добавлен в неподключенные")
+					
 				return -1
 
 		else:
@@ -138,7 +146,7 @@ class Retranslator:
 		"""
 		assert isinstance(protocol_name, str)
 		self.protocol_name = protocol_name
-
+		
 		self.packet = bytes()
 		self.data = {}
 
@@ -379,6 +387,14 @@ class Retranslator:
 			file = load(s)
 
 		return file
+
+
+	@staticmethod
+	def utc_to_local(utc_dt):
+		if isinstance(utc_dt, datetime):
+			return utc_dt.replace(tzinfo=timezone.utc).astimezone(tz=None)
+		else:
+			return utc_dt
 
 
 	def __str__(self):

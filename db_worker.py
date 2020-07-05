@@ -2,10 +2,11 @@ import pymysql
 import time
 import os
 
+from copy import deepcopy
 from contextlib import closing
 from json import loads
 from queue import Queue
-from datetime import datetime, timezone
+from datetime import datetime
 
 from src.core import TCPConnections
 from src.retranslators import WialonRetranslator, EGTS, WialonIPS
@@ -19,7 +20,7 @@ PASSWD 		=	'cMiOm1rZ'
 DB 			= 	'tracks'
 
 RECORDS_TBL = 	'geo_100'  	 #имя таблицы, в которую поступают записи
-DELAY 		= 	3.0   	 	 #через сколько секунд проверять бд на наличие новых записей
+DELAY 		= 	5.0   	 	 #через сколько секунд проверять бд на наличие новых записей
 
 CONN 		= 	{
 				"host"		 : 	HOST,
@@ -31,30 +32,46 @@ CONN 		= 	{
 				"cursorclass": 	pymysql.cursors.DictCursor
 				}
 
+RETRANSLATORS_ALL = (
+	'WialonIPSRetranslator',
+	'EgtsRetranslator',
+	'WialonRetranslator'
+)
+
 RETRANSLATORS = {
-				'WialonIPSRetranslator'	:	WialonIPS(),
-				'EgtsRetranslator'		: 	EGTS(),
-				'WialonRetranslator'	: 	WialonRetranslator(),
-				}
+	'EgtsRetranslator'		: 	EGTS(),
+	'WialonRetranslator'	: 	WialonRetranslator(),
+	'WialonIPSRetranslator'	:	WialonIPS()
+}
 
 
-rec_que = Queue()
+rec_que = {ret:Queue() for ret in RETRANSLATORS_ALL}
+ignored_imei = {}
 
-def get_ipports(connection):
+
+
+def get_ipports(connection, ret=None):
 	ipport_tuple = []
-	for ret_name in RETRANSLATORS.keys():
+	if ret:
+		retall = [ret]
+	else:
+		retall = RETRANSLATORS_ALL
+		
+	for ret_name in retall:
 		with connection.cursor() as cursor:
 			query = f"SELECT DISTINCT ip, port FROM {ret_name.lower()}"
 			cursor.execute(query)
-			logger.info(f'{cursor.rowcount} соединений для {ret_name}\n')
+			if not ret:
+				logger.info(f'{cursor.rowcount} соединений для {ret_name}\n')
+				
 			for row in cursor:
 				if (row['ip'], int(row['port'])) not in ipport_tuple:
 					ipport_tuple.append((row['ip'], int(row['port'])))
-
+	
 	return ipport_tuple
 
 
-def check_records(connection, ip, port):
+def check_records(connection, ip, port, ret=None):
 	def check_records_for_imei(imei):
 		with connection.cursor() as cursor:
 			query = f"SELECT MAX(`id`) FROM `sent_id` WHERE `ip`='{ip}' AND `port`={port} AND `imei`={imei}"
@@ -68,41 +85,62 @@ def check_records(connection, ip, port):
 				query = f"INSERT INTO `sent_id` VALUES ({last_id}, '{ip}', {port}, {imei})"
 				cursor.execute(query)
 				connection.commit()
-
+			
+				
 		with connection.cursor() as cursor:
 			query = f"SELECT * FROM {RECORDS_TBL} WHERE `id`>{last_id} AND `imei`={imei}"
-			query += " ORDER BY `ts`"
 			cursor.execute(query)
 
-			logger.info(f'Найдено {cursor.rowcount} записей для {imei} [{ip}:{port}]\n')
-			for row in cursor.fetchall():
-				if (row['lat'] is not None):
-					row.update({"ip":ip, "port":port}) 
-					rec_que.put(row)
+			if ret is None:
+				retall = RETRANSLATORS_ALL
+			
+			else:
+				retall = [ret]
+				
+			rows = cursor.fetchall()
+			notemp = 0
+			for row in rows:
+				if (row.get('lat', None) is not None) and (row['datetime'].timestamp()>0):
+					for ret_name in retall:
+							if row['imei'] in imei_by_ret[ret_name]:
+								rec_que[ret_name].put(row)
+					
+					notemp += 1
+			
+			if not ret:
+				logger.info(f'Найдено {notemp} записей для {imei} [{ip}:{port}]\n')
+			
+		return notemp
 
-			rowcount = cursor.rowcount
-
-		return rowcount
-
-	all_imei = get_all_imei(connection, ip, port)
+	all_imei, imei_by_ret = get_all_imei(connection, ip, port)
+	if not ret:
+		logger.info(f"$ Всего машин для {ip}:{port} - {len(all_imei)}\n")
 	count = 0
 	for imei in all_imei:
-		count += check_records_for_imei(imei)
-
+		c = check_records_for_imei(imei)
+		count += c
+		
 	return count
 
 
-def get_all_imei(connection, ip, port):
+def get_all_imei(connection, ip=None, port=None):
 	all_imei = []
-	for ret_name in RETRANSLATORS.keys():
+	all_imei_by_ret = {}
+	for ret_name in RETRANSLATORS_ALL:
 		with connection.cursor() as cursor:
-			query = f"SELECT `imei` FROM {ret_name.lower()} WHERE `ip`='{ip}' AND `port`={port}"
+			if ip and port:
+				query = f"SELECT `imei` FROM {ret_name.lower()} WHERE `ip`='{ip}' AND `port`={port}"
+			else:
+				query = f"SELECT `imei` FROM {ret_name.lower()}"
+				
 			cursor.execute(query)
-
+			all_imei_by_ret[ret_name] = []
+			
 			for i in cursor.fetchall():
 				all_imei.append(i['imei'])
+				all_imei_by_ret[ret_name].append(i['imei'])
 
-	return all_imei
+	return all_imei, all_imei_by_ret
 	
 
 def utc_to_local(utc_dt):
@@ -112,77 +150,117 @@ def utc_to_local(utc_dt):
 def get_rec_from_to(connection, imei, frm, to):
 	with connection.cursor() as cursor:
 		query = f"SELECT * FROM {RECORDS_TBL} WHERE `imei`={imei}"
-		query += f" AND `datetime`>{frm} AND `datetime`<{to}"
+		query += f" AND `datetime`>'{frm}' AND `datetime`<'{to}' LIMIT 500000"
 		cursor.execute(query)
 		rows = cursor.fetchall()
 
 	return rows
 
 
-def send_row(connection, row):
-	row['imei'] = str(row['imei'])
-	row['reserve'] = loads('{'+row['reserve']+'}')
-	row.update(row['reserve'])
-	del(row['reserve'])
-	row['datetime'] = int(utc_to_local(row['datetime']).timestamp())
-	row.update({"time":int(utc_to_local(datetime.now()).timestamp())})
+def send_row(connection, row, retranslator, update=True):
+	if int(str(row['datetime'])[:4])<2010:
+		return {}
+		
+	if row.get('reserve', None):
+		row['imei'] = str(row['imei'])
+		row['reserve'] = loads('{'+row['reserve']+'}')
+		row.update(row['reserve'])
+		del(row['reserve'])
+		
+		if not row.get('sat_num', ''):
+			row.update({"sat_num":0})
+		
+		row['lon'] = float(row['lon'])
+		row['lat'] = float(row['lat'])
 	
-	if not row.get('sat_num', ''):
-		row.update({"sat_num":0})
-	
-	row['lon'] = float(row['lon'])
-	row['lat'] = float(row['lat'])
-	
-	retranslators = []
-	trackers = {}
-	for ret_name in RETRANSLATORS.keys():
-		with connection.cursor() as cursor:
-			query = f'SELECT * FROM `{ret_name.lower()}` WHERE `imei`={row["imei"]}'
-			cursor.execute(query)
-			if cursor.rowcount>0:
-				retranslators.append(ret_name)
-				trackers.update({ret_name: cursor.fetchall()})
-	
-	for ret_name in retranslators:
-		for tracker in trackers[ret_name]:
-			tn = f"{tracker['ip']}:{tracker['port']}"
-			if TCPConnections.CONNECTED.get(tn, ''):
-				tm = time.time()
-				sended, status = RETRANSLATORS[ret_name].send(tracker['ip'], tracker['port'], row)
+	trackers = []
+	with connection.cursor() as cursor:
+		query = f'SELECT * FROM `{retranslator.protocol_name.lower()}` WHERE `imei`={row["imei"]}'
+		cursor.execute(query)
+		if cursor.rowcount>0:
+			trackers = cursor.fetchall()
+
+	sended_all = {}
+	for tracker in trackers:
+		tn = f"{tracker['ip']}:{tracker['port']}"
+					
+		if (not TCPConnections.CONNECTED.get(tn, None)) and ((tracker['ip'], tracker['port']) not in TCPConnections.NOT_CONNECTED):
+			logger.info(f"Обнаружен новый сервер {tracker['ip']}:{tracker['port']}")
+			if TCPConnections.connect(tracker['ip'], tracker['port'])==-1:
+				logger.info(f"Подключение к нему не удалось\n")
+				TCPConnections.NOT_CONNECTED.append((tracker['ip'], tracker['port']))
 				
-				if sended:
-					msg = "Запись ОТПРАВЛЕНА\n"
-				else:
-					msg = "Запись НЕ ОТПРАВЛЕНА\n"
+		if TCPConnections.CONNECTED.get(tn, ''):
+			tm = time.time()
+			
+			sended, status = retranslator.send(tracker['ip'], tracker['port'], row)
+			sended_all.update({tn: status})
+			
+			if sended:
+				msg = "Запись ОТПРАВЛЕНА\n"
+			else:
+				msg = "Запись НЕ ОТПРАВЛЕНА\n"
+			
+			elapsed_time = time.time()-tm
+			
 				
-				elapsed_time = time.time()-tm
-				msg += "server".ljust(13, ' ')+f"{tracker['ip']}:"+f"{tracker['port']}\n"
-				msg += "ret_type".ljust(13, ' ')+f"{ret_name}\n"
-				msg += "row_id".ljust(13, ' ')+f"{row['id']}\n"
-				msg += "imei".ljust(13, ' ')+f"{row['imei']}\n"
-				msg += "datetime".ljust(13, ' ')+f"{datetime.fromtimestamp(row['datetime'])}\n"
-				msg += "status".ljust(13, ' ')+f"{status}\n"
-				msg += "elapsed_time".ljust(13, ' ')+"{:.2f}\n".format(elapsed_time)
-				msg += "seconds_left".ljust(13, ' ')+f"{int(elapsed_time*rec_que.qsize())}\n"
-				msg += "rows_left".ljust(13, ' ')+f"{rec_que.qsize()}\n"
-				
-				
-				if not sended:
-					logger.error(msg)
-					continue
-				
-				else:
-					logger.info(msg)
+			msg += "Сервер".ljust(26, '-')+f"{tracker['ip']}:"+f"{tracker['port']}\n"
+			msg += "Ретранслятор".ljust(26, '-')+f"{retranslator.protocol_name}\n"
+			msg += "ID записи".ljust(26, '-')+f"{row['id']}\n"
+			msg += "imei".ljust(26, '-')+f"{row['imei']}\n"
+			msg += "Время точки".ljust(26, '-')+f"{datetime.fromtimestamp(row['datetime'])}\n"
+			msg += "Статус отправки".ljust(26, '-')+f"{status}\n"
+			msg += "Затраченное время (сек)".ljust(26, '-')+"{:.2f}\n".format(elapsed_time)
+			for ret, x in rec_que.items():
+				msg += f"Записей для {ret[:-12]}".ljust(26, '-')+f"{x.qsize()}\n"
+			
+			if not sended:
+				logger.error(msg)
+				continue
+			
+			else:
+				logger.info(msg)
+				if update:
 					condition = f" WHERE `ip`='{tracker['ip']}' AND `port`={tracker['port']}"
 					condition += f" AND `imei`={row['imei']}"
-
+					
 					query = f"SELECT * FROM `sent_id`" + condition
 					with connection.cursor() as cursor:
 						cursor.execute(query)
 						if cursor.rowcount==0:
-							query = f"INSERT INTO `sent_id` VALUES ({row['id']}, '{row['ip']}', {row['port']}, {row['imei']})"
+							query = f"INSERT INTO `sent_id` VALUES ({row['id']}, '{tracker['ip']}', {tracker['port']}, {row['imei']})"
 						else:
 							query = f"UPDATE `sent_id` SET `id`={row['id']}"+condition
 						
 						cursor.execute(query)
 						connection.commit()
+			
+	return sended_all
+	
+	
+def receive_rows(connection, ret_name, tstart):
+	not_emp = 0
+	ipports = get_ipports(connection, ret_name)
+	for ip, port in ipports:
+		if not TCPConnections.CONNECTED.get(f'{ip}:{port}', None):
+			if (ip, port) not in TCPConnections.NOT_CONNECTED:
+				TCPConnections.NOT_CONNECTED.append((ip, port))
+			
+			continue
+			
+		not_emp += check_records(connection, ip, port, ret_name)
+		
+	len_s = len(TCPConnections.NOT_CONNECTED)+len(TCPConnections.CONNECTED)
+	
+	if not_emp:
+		m = f'Найдено {not_emp} новых записей\n'
+	
+	else:
+		m = f'Новых записей не найдено\n'
+	
+	m += f"Протокол {ret_name}\n"
+	m += f'Серверов подключено [{len(TCPConnections.CONNECTED)}/{len_s}]\n'
+	m += f"Время работы: {int((time.time()-tstart)/60)} минут(ы)\n"
+	logger.info(m)
+	
+	return not_emp

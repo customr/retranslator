@@ -83,7 +83,7 @@
 		"EGTS_RECORD_HEADER": {
 			"record_length":	  	 23,
 			"rid":		    	  	 "&rid",
-			"record_flags": 	  	 133,
+			"record_flags": 	  	 5,
 			"oid":					 "&imei[-6:]",
 			"time":					 "&datetime",
 			"sourse_service_type":	 1,
@@ -117,7 +117,7 @@
 		"EGTS_RECORD_HEADER": {
 			"record_length":	  	 31,
 			"rid":		    	  	 "&rid",
-			"record_flags": 	  	 133,
+			"record_flags": 	  	 5,
 			"oid":					 "&imei[-6:]",
 			"time":					 "&datetime",
 			"sourse_service_type":	 2,

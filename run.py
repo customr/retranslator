@@ -5,99 +5,79 @@ from db_worker import *
 
 def receiver():
 	with closing(pymysql.connect(**CONN)) as connection:
-		try:
-			ipport_tuple = get_ipports(connection)
-			TCPConnections.connect_many(ipport_tuple)
+		tstart = time.time()
+		ipport_tuple = get_ipports(connection)
+		TCPConnections.connect_many(ipport_tuple)
+		from_id = {}
 
-			all_imei = []
-			connected = []
-			total_count = 0
-			for conn in TCPConnections.CONNECTED.keys():
-				ip, port = conn.split(':')
-				total_count += check_records(connection, ip, port)
-				connected.append(conn)
-				a_imei = get_all_imei(connection, ip, port)
-				all_imei.extend(a_imei)
-
-			logger.info(f"ИТОГО - {total_count} старых записей будут отправлены\n")
-
-			with connection.cursor() as cursor:
-				query = f'SELECT MAX(`id`) FROM `{RECORDS_TBL}`'
-				cursor.execute(query)
-				from_id = cursor.fetchone()['MAX(`id`)']
-
-			send_th_1.start()
-			while True:
-				if len(TCPConnections.CONNECTED.keys())>len(connected):
-					new = list(set(TCPConnections.CONNECTED.keys())-set(connected))
-
-					for tracker in new:
-						t_ip, t_port = tracker.split(':')
-						connected = [x for x in TCPConnections.CONNECTED.keys()]
-						check_records(connection, t_ip, t_port)
-						new_imei = get_all_imei(connection, t_ip, t_port)
-						all_imei.extend(new_imei)
-				
-				elif len(TCPConnections.CONNECTED.keys())<len(connected):
-					connected = [x for x in TCPConnections.CONNECTED.keys()]
-
-				with connection.cursor() as cursor:
-					query = f"SELECT * FROM {RECORDS_TBL} WHERE `id`>{from_id} AND (`imei`={all_imei[0]}"
-					for imei in all_imei[1:]:
-						query += f' OR `imei`={imei}'
-
-					query += ')'
-					query += " ORDER BY `ts`"
-					cursor.execute(query)
-					
-					not_emp = 0
-					for row in cursor.fetchall():
-						if row['lat'] is not None:
-							rec_que.put(row)
-							not_emp += 1
-							
-						from_id = row['id']
-					
-				
-					len_s = len(TCPConnections.NOT_CONNECTED)+len(TCPConnections.CONNECTED)
-					
-					if not_emp:
-						m = f'Найдено {not_emp} новых записей\n'
-						m += f'Серверов подключено [{len(TCPConnections.CONNECTED)}/{len_s}]\n'
-						logger.info(m)
-					
-					else:
-						m = f'Новых записей не найдено\n'
-						m += f'Серверов подключено [{len(TCPConnections.CONNECTED)}/{len_s}]\n'
-						logger.info(m)
-					
-				connection.commit()
-				time.sleep(DELAY)
+		connected = []
+		total_count = 0
+		connected_now = [x for x in TCPConnections.CONNECTED.keys()]
 		
-		except Exception as e:
-			logger.critical(f"RECEIVER {e}\n")
+		for conn in connected_now:
+			ip, port = conn.split(':')
+			c = check_records(connection, ip, port)
+			total_count += c
+
+		logger.info(f"ИТОГО - {total_count} старых записей будут отправлены\n")
+
+		with connection.cursor() as cursor:
+			query = f'SELECT MAX(`id`) FROM `{RECORDS_TBL}`'
+			cursor.execute(query)
+			mid = cursor.fetchone()['MAX(`id`)']
+			from_id = {ret: deepcopy(mid) for ret in RETRANSLATORS_ALL}
+
+		for th in send_th:
+			th.start()
+			
+		while True:
+			for ret_name in RETRANSLATORS_ALL:
+				if rec_que[ret_name].qsize()==0:
+					receive_rows(connection, ret_name, tstart)
+					connection.commit()
+			
+			time.sleep(10)
 
 
-def sender():
+def sender(ret, th):
+	workers = 10
 	with closing(pymysql.connect(**CONN)) as connection:
-		try:
-			while True:
-				row = rec_que.get()
-				send_row(connection, row)
-				rec_que.task_done()
-		
-		except Exception as e:
-			logger.critical(f"SENDER {e}\n")
+		while True:
+			row = rec_que[ret].get()
+			retranslator = RETRANSLATORS[ret]
+			send_row(connection, row, retranslator, True)
+			rec_que[ret].task_done()
 
 
 def check_log_size():
 	while True:
-		if (os.path.getsize('src/logs/history.log')/1024) > 1024*10:
+		if (os.path.getsize('src/logs/history.log')/1024) > 1024*10*10:
 			open('src/logs/history.log', 'w').close()
 		
-		time.sleep(60*60*5)
+		time.sleep(60*60*4)
 
+
+#with closing(pymysql.connect(**CONN)) as connection:
+#	ipports = get_ipports(connection)
+#	c_per_th = 8
+#	servers_th = []
+#	
+#	for i in range(len(ipports)//c_per_th):
+#		servers_th.append(ipports[i*c_per_th:i*c_per_th+c_per_th])
+#	
+#	servers_th.append(ipports[len(ipports)//c_per_th*c_per_th+1:])
+#	assoc = {}
+#	
+#	for n, th in enumerate(servers_th):
+#		for ipport in th:
+#			assoc.update({f"{ipport[0]}:{ipport[1]}": n})
+#	
+#	print(assoc)
 
 recv_th = threading.Thread(target=receiver).start()
-send_th_1 = threading.Thread(target=sender)
 cls_th  = threading.Thread(target=check_log_size).start()
+
+send_th = []
+send_th.append(threading.Thread(target=sender, args=('EgtsRetranslator',0,)))
+send_th.append(threading.Thread(target=sender, args=('WialonRetranslator',1,)))
+send_th.append(threading.Thread(target=sender, args=('WialonIPSRetranslator',2,)))

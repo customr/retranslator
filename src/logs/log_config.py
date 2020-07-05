@@ -1,8 +1,9 @@
 import logging
 import sys
+
 from logging.handlers import RotatingFileHandler
 
-sys.stderr = open('src/logs/history.log', 'a')
+sys.stderr = open('src/logs/errors.log', 'a')
 
 LEVEL = logging.INFO
 frt = logging.Formatter('%(levelname)s :: %(message)s %(asctime)s\n'+'-'*15)
@@ -10,7 +11,7 @@ frt = logging.Formatter('%(levelname)s :: %(message)s %(asctime)s\n'+'-'*15)
 logger = logging.getLogger()
 logger.setLevel(LEVEL)
 	
-handler = RotatingFileHandler('src/logs/history.log', mode='a', maxBytes=10*1024*1024)
+handler = RotatingFileHandler('src/logs/history.log', mode='a', maxBytes=1024*1024*5)
 handler.setFormatter(frt)
 logger.addHandler(handler)
 

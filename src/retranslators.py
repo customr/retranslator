@@ -28,9 +28,12 @@ class WialonRetranslator(Retranslator):
 		
 	
 	def send(self, ip, port, row):
+		self.data = {}
+		if not isinstance(row['datetime'], int):
+			row['datetime'] = int(Retranslator.utc_to_local(row['datetime']).timestamp())
 		packet = self.pack_record(**row)
 		response = TCPConnections.send(ip, port, packet)
-		if response==b'11':
+		if response==b'11' or response==b'f0' or response==b'':
 			return 1, response
 		
 		return 0, response
@@ -74,7 +77,10 @@ class WialonRetranslator(Retranslator):
 		self.add_template("ign", ign=data["ignition"])
 		self.add_template('sens', sens=data["sensor"])
 		
-		if data.get('temp', None):
+		if data.get('t_ret', None):
+			self.add_template('temp', temp=data["t_ret"])
+		
+		elif data.get('temp', None):
 			self.add_template('temp', temp=data["temp"])
 
 		packet_size = len(self.packet)
@@ -99,6 +105,9 @@ class EGTS(Retranslator):
 
 
 	def send(self, ip, port, row):
+		if isinstance(row['datetime'], datetime):
+			row['datetime'] = int(row['datetime'].timestamp())
+			
 		if row['imei']!=self.auth_imei.get(f"{ip}:{port}"):
 			self.auth_imei[f"{ip}:{port}"] = ''
 			self.packet = bytes()
@@ -148,6 +157,8 @@ class EGTS(Retranslator):
 				return 0, response[-6:-4]
 				
 		else:
+			TCPConnections.close_conn(ip, port)
+			TCPConnections.NOT_CONNECTED.append((ip, port))
 			return 0, response[-6:-4]
 
 
@@ -204,11 +215,12 @@ class EGTS(Retranslator):
 
 	def handle_spd_and_dir(self, speed, dr):
 		speed *= 10
+		dr = 0
 		self.data.update({"spd": speed, "dir": dr})
 
 
 	def handle_posflags(self, ign):
-		posflags = 1 #флаг VLD
+		posflags = 9 #флаг VLD
 		if ign:
 			posflags += 0b10000 #флаг MV
 
@@ -258,13 +270,17 @@ class WialonIPS(Retranslator):
 
 	def send(self, ip, port, row):
 		self.data = {}
-		
+		if isinstance(row['datetime'], datetime):
+			row['datetime'] = int(row['datetime'].timestamp())
+			
 		if str(row['imei'])!=self.auth_imei.get(f"{ip}:{port}"):
-			self.auth_imei[f"{ip}:{port}"] = ''
-			TCPConnections.close_conn(ip, port)
-			if TCPConnections.connect(ip, int(port))==-1:
-				TCPConnections.NOT_CONNECTED.append((ip, port))
-				return 0, 0
+			if self.auth_imei.get(f"{ip}:{port}", None):
+				logger.info("WialonIPSRetranslator Необходима повторная авторизация\n")
+				self.auth_imei[f"{ip}:{port}"] = ''
+				TCPConnections.close_conn(ip, port)
+				if TCPConnections.connect(ip, int(port))==-1:
+					TCPConnections.NOT_CONNECTED.append((ip, port))
+					return 0, 0
 				
 			packet = self.add_block('authentication', imei=str(row['imei']))
 			response = TCPConnections.send(ip, port, packet)
@@ -285,7 +301,7 @@ class WialonIPS(Retranslator):
 				
 				else:
 					self.auth_imei[f"{ip}:{port}"] = str(row['imei'])
-
+		
 		packet = self.add_block('posinfo', **row)
 		response = TCPConnections.send(ip, port, packet)
 
@@ -314,17 +330,18 @@ class WialonIPS(Retranslator):
 		name (str): имя блока
 		data (kwargs): параметры в соотвествии с выбранным блоком 
 		"""
-		
+		last =  ';'
 		if action=='posinfo':
 			data['speed'] = int(data['speed'])
 			data['direction'] = int(data['direction'])
 			data = self.handle_data(data)
+			last = '|'
 			
 		symbol, params = self.protocol[action]
 		params = self.paste_data_into_params(params, data)
 
 		header = f"#{symbol}#"
-		block = ';'.join(list(map(str, params.values())))+';'
+		block = ';'.join(list(map(str, params.values())))+last
 		crc = str(hex(crc16_arc(bytes(block.encode('ascii')))))[2:].upper()
 		block = header + block + crc + '\r\n'
 		block = bytes(block.encode('ascii'))
@@ -343,7 +360,10 @@ class WialonIPS(Retranslator):
 		params = f"ign:1:{data['ignition']}"
 		params += f",sens:1:{data['sensor']}"
 		
-		if data.get('temp', None):
+		if data.get('t_ret', None):
+			params += f",temp:2:{data['t_ret']}"
+		
+		elif data.get('temp', None):
 			params += f",temp:2:{data['temp']}"
 
 		lon1 = int(data['lat'])
