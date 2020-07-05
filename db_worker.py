@@ -16,7 +16,7 @@ from src.logs.log_config import logger
 HOST 		= 	'127.0.0.1'
 PORT 		=   3306
 USER 		= 	'retranslator'
-PASSWD 		=	'cMiOm1rZ'
+PASSWD 		=	''
 DB 			= 	'tracks'
 
 RECORDS_TBL = 	'geo_100'  	 #имя таблицы, в которую поступают записи
