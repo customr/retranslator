@@ -6,8 +6,8 @@ from binascii import hexlify, a2b_hex
 
 from src.logs.log_config import logger
 from src.core import Retranslator, TCPConnections
-from src.crc import crc8, crc16, crc16_arc
-
+from src.crc import crc8, crc16, crc16_arc, crc16_modbus
+from src.utils import *
 
 class WialonRetranslator(Retranslator):
 
@@ -94,9 +94,6 @@ class EGTS(Retranslator):
 	def __init__(self):
 		"""EGTS протокол
 		https://www.swe-notes.ru/post/protocol-egts/
-
-		ip (str): ip адрес получателся
-		port (int): порт получаетеля
 		"""
 
 		super().__init__("EgtsRetranslator")
@@ -388,3 +385,65 @@ class WialonIPS(Retranslator):
 			})
 
 		return data
+
+
+class GalileoSkyTrackerEmu(Retranslator):
+	def __init__(self):
+		"""Galileosky протокол (эмуляция трекера)
+		https://7gis.ru/assets/files/docs/manuals_ru/opisanie-protokola-obmena-s-serverom.pdf
+		"""
+		super().__init__('GalileoSkyTrackerEmu')
+		self.auth_imei = {}
+
+	
+	def send(self, ip, port, row):
+		self.data = {}
+			
+		if str(row['imei'])!=self.auth_imei.get(f"{ip}:{port}"):
+			if self.auth_imei.get(f"{ip}:{port}", None):
+				logger.info("GalileoSkyTrackerEmu Необходима повторная авторизация\n")
+				self.auth_imei[f"{ip}:{port}"] = ''
+				TCPConnections.close_conn(ip, port)
+				if TCPConnections.connect(ip, int(port))==-1:
+					TCPConnections.NOT_CONNECTED.append((ip, port))
+					return 0, 'Connection error'
+				
+			packet = self.add_block('authentication', imei=str(row['imei']))
+			response = TCPConnections.send(ip, port, packet)
+			self.auth_imei[f"{ip}:{port}"] = str(row['imei'])
+		
+		packet = b''
+		packet = self.add_block('posinfo', **row)
+		response = TCPConnections.send(ip, port, packet)
+		return 1, response
+		
+	
+	def add_block(self, action, **data):
+		"""
+		Добавляет часть пакета описанную в json
+		name (str): имя блока
+		data (kwargs): параметры в соотвествии с выбранным блоком 
+		"""
+		
+		if action=='posinfo':
+			data['sat_num'] == 0b1111 if data['sat_num']>0b1111 else data['sat_num']
+			data['lat'] *= 1000000
+			data['lon'] *= 1000000
+			data['lat'] = int(data['lat'])
+			data['lon'] = int(data['lon'])
+			data['speed'] *= 10
+			data['speed'] = int(data['speed'])
+			if isinstance(row['datetime'], datetime):
+				data['timestamp'] = int(data['datetime'].timestamp())
+			data['ignsens'] = data['sensor']<<1+data['ignition']
+
+		fmt = self.protocol['FORMATS'][action]
+		params = self.protocol['ACTIONS'][action]
+		params = self.paste_data_into_params(params, data)
+		block = Retranslator.processing(fmt, params, '<')
+		block = struct.pack('<B', 1) + struct.pack('<H', len(block)) + block
+		block += struct.pack('<H', crc16_modbus(block))
+
+		logger.debug(f"Добавлен блок [{action}] (size {len(block)} bytes)\n{hexlify(block)}")
+		logger.debug(f"{params.values()}")
+		return block

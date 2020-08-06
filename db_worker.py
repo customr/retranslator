@@ -9,39 +9,22 @@ from queue import Queue
 from datetime import datetime
 
 from src.core import TCPConnections
-from src.retranslators import WialonRetranslator, EGTS, WialonIPS
+from src.retranslators import WialonRetranslator, EGTS, WialonIPS, GalileoSkyTrackerEmu
 from src.logs.log_config import logger
-
-
-HOST 		= 	'127.0.0.1'
-PORT 		=   3306
-USER 		= 	'retranslator'
-PASSWD 		=	''
-DB 			= 	'tracks'
-
-RECORDS_TBL = 	'geo_100'  	 #имя таблицы, в которую поступают записи
-DELAY 		= 	5.0   	 	 #через сколько секунд проверять бд на наличие новых записей
-
-CONN 		= 	{
-				"host"		 : 	HOST,
-				"port"		 :  PORT,
-				"user"		 : 	USER,
-				"password"	 : 	PASSWD,
-				"db"		 : 	DB,
-				"charset"	 : 	'utf8mb4',
-				"cursorclass": 	pymysql.cursors.DictCursor
-				}
+from db_connect import *
 
 RETRANSLATORS_ALL = (
 	'WialonIPSRetranslator',
 	'EgtsRetranslator',
-	'WialonRetranslator'
+	'WialonRetranslator',
+	'GalileoSkyTrackerEmu'
 )
 
 RETRANSLATORS = {
 	'EgtsRetranslator'		: 	EGTS(),
 	'WialonRetranslator'	: 	WialonRetranslator(),
-	'WialonIPSRetranslator'	:	WialonIPS()
+	'WialonIPSRetranslator'	:	WialonIPS(),
+	'GalileoSkyTrackerEmu'  : 	GalileoSkyTrackerEmu()
 }
 
 

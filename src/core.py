@@ -136,13 +136,6 @@ class Retranslator:
 		"""Родитель всех протоколов
 
 		protocol_name (str): имя протокола, как в папке PROTOCOLS_DIR без расширения
-		header_is_ready (bool): флаг, есть ли уже header в пакете, или нет
-		packet (bytes): пакет данных
-		packet_format (str): struct-формат всего пакета
-		packer_params (list): параметры в соответствии с packet_format
-		data (dict): хранит введенные параметры шаблонов
-		protocol (dict): подгруженные данные по протоколу из json
-
 		"""
 		assert isinstance(protocol_name, str)
 		self.protocol_name = protocol_name

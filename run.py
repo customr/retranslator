@@ -1,7 +1,7 @@
 import threading
 
 from db_worker import *
-
+from db_connect import *
 
 def receiver():
 	with closing(pymysql.connect(**CONN)) as connection:
@@ -36,11 +36,10 @@ def receiver():
 					receive_rows(connection, ret_name, tstart)
 					connection.commit()
 			
-			time.sleep(10)
+			time.sleep(DELAY)
 
 
 def sender(ret, th):
-	workers = 10
 	with closing(pymysql.connect(**CONN)) as connection:
 		while True:
 			row = rec_que[ret].get()
@@ -54,6 +53,9 @@ def check_log_size():
 		if (os.path.getsize('src/logs/history.log')/1024) > 1024*10*10:
 			open('src/logs/history.log', 'w').close()
 		
+		if (os.path.getsize('tracker_receiver/src/logs/debug.log')/1024) > 1024*10*10:
+			open('tracker_receiver/src/logs/debug.log', 'w').close()
+
 		time.sleep(60*60*4)
 
 

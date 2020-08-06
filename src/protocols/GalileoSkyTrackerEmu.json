@@ -1,0 +1,45 @@
+{
+    "FORMATS": {
+        "authentication" : {
+            "t0": "B",
+            "imei": "15s"
+        },
+
+        "posinfo" : {
+            "t0": "B",
+            "imei": "15s",
+            "t1": "B",
+            "ts": "I",
+            "t2": "B",
+            "sat": "B",
+            "lon": "I",
+            "lat": "I",
+            "t3": "B",
+            "spd": "H",
+            "dir": "H",
+            "t4": "B",
+            "dinp": "H"
+        }
+    },
+    "ACTIONS" : {
+        "authentication" : {
+            "t0": 3,
+            "imei": "&imei"
+        },
+
+        "posinfo" : {
+            "t0": 3,
+            "imei": "&imei",
+            "t1": 32,
+            "ts": "&timestamp",
+            "t2": 48,
+            "sat": "&sat_num",
+            "lon": "&lon",
+            "lat": "&lat",
+            "t3": 51,
+            "spd": "&speed",
+            "t4": 70,
+            "dinp": "&ignsens"
+        }
+    } 
+}
