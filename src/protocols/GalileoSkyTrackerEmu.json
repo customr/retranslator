@@ -6,14 +6,12 @@
         },
 
         "posinfo" : {
-            "t0": "B",
-            "imei": "15s",
             "t1": "B",
             "ts": "I",
             "t2": "B",
             "sat": "B",
-            "lon": "I",
             "lat": "I",
+            "lon": "I",
             "t3": "B",
             "spd": "H",
             "dir": "H",
@@ -28,14 +26,12 @@
         },
 
         "posinfo" : {
-            "t0": 3,
-            "imei": "&imei",
             "t1": 32,
-            "ts": "&timestamp",
+            "ts": "&datetime",
             "t2": 48,
             "sat": "&sat_num",
-            "lon": "&lon",
             "lat": "&lat",
+            "lon": "&lon",
             "t3": 51,
             "spd": "&speed",
             "t4": 70,

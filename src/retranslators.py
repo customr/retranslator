@@ -190,11 +190,11 @@ class EGTS(Retranslator):
 				self.data["rid"] = self.inc_id(self.data['rid'])
 
 			packet += block
-			logger.debug(f"[{action}] Добавлен блок '{name}' (size {len(block)} bytes)\n{hexlify(block)}")
+			logger.debug(f"EGTS [{action}] Добавлен блок '{name}' (size {len(block)} bytes)\n{hexlify(block)}")
 
 		control_sum = crc16(packet, 11, len(packet)-11)
 		control_sum = struct.pack("<H", control_sum)
-		logger.debug(f"[{action}] Добавлена контрольная сумма записи (size {len(control_sum)} bytes)\n{hexlify(control_sum)}")
+		logger.debug(f"EGTS [{action}] Добавлена контрольная сумма записи (size {len(control_sum)} bytes)\n{hexlify(control_sum)}")
 		self.packet += packet + control_sum
 
 
@@ -343,7 +343,7 @@ class WialonIPS(Retranslator):
 		block = header + block + crc + '\r\n'
 		block = bytes(block.encode('ascii'))
 
-		logger.debug(f"Добавлен блок [{action}] (size {len(block)} bytes)\n{hexlify(block)}")
+		logger.debug(f"WialonIPS Добавлен блок [{action}] (size {len(block)} bytes)\n{hexlify(block)}")
 		logger.debug(f"{params.values()}")
 		return block
 		
@@ -398,7 +398,10 @@ class GalileoSkyTrackerEmu(Retranslator):
 	
 	def send(self, ip, port, row):
 		self.data = {}
-			
+		
+		if isinstance(row['datetime'], datetime):
+			row['datetime'] = int(row['datetime'].timestamp())
+		
 		if str(row['imei'])!=self.auth_imei.get(f"{ip}:{port}"):
 			if self.auth_imei.get(f"{ip}:{port}", None):
 				logger.info("GalileoSkyTrackerEmu Необходима повторная авторизация\n")
@@ -433,8 +436,6 @@ class GalileoSkyTrackerEmu(Retranslator):
 			data['lon'] = int(data['lon'])
 			data['speed'] *= 10
 			data['speed'] = int(data['speed'])
-			if isinstance(row['datetime'], datetime):
-				data['timestamp'] = int(data['datetime'].timestamp())
 			data['ignsens'] = data['sensor']<<1+data['ignition']
 
 		fmt = self.protocol['FORMATS'][action]
@@ -444,6 +445,6 @@ class GalileoSkyTrackerEmu(Retranslator):
 		block = struct.pack('<B', 1) + struct.pack('<H', len(block)) + block
 		block += struct.pack('<H', crc16_modbus(block))
 
-		logger.debug(f"Добавлен блок [{action}] (size {len(block)} bytes)\n{hexlify(block)}")
+		logger.debug(f"GalileoSkyTrackerEmu Добавлен блок [{action}] (size {len(block)} bytes)\n{hexlify(block)}")
 		logger.debug(f"{params.values()}")
 		return block

@@ -83,3 +83,4 @@ send_th = []
 send_th.append(threading.Thread(target=sender, args=('EgtsRetranslator',0,)))
 send_th.append(threading.Thread(target=sender, args=('WialonRetranslator',1,)))
 send_th.append(threading.Thread(target=sender, args=('WialonIPSRetranslator',2,)))
+send_th.append(threading.Thread(target=sender, args=('GalileoSkyTrackerEmu',3,)))
