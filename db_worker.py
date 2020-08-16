@@ -42,7 +42,7 @@ def get_ipports(connection, ret=None):
 		
 	for ret_name in retall:
 		with connection.cursor() as cursor:
-			query = f"SELECT DISTINCT ip, port FROM {ret_name.lower()}"
+			query = f"SELECT DISTINCT ip, port FROM `{RET_TABLE}` WHERE `protocol`='{ret_name.lower()}'"
 			cursor.execute(query)
 			if not ret:
 				logger.info(f'{cursor.rowcount} соединений для {ret_name}\n')
@@ -112,9 +112,9 @@ def get_all_imei(connection, ip=None, port=None):
 	for ret_name in RETRANSLATORS_ALL:
 		with connection.cursor() as cursor:
 			if ip and port:
-				query = f"SELECT `imei` FROM {ret_name.lower()} WHERE `ip`='{ip}' AND `port`={port}"
+				query = f"SELECT `imei` FROM `{RET_TABLE}` WHERE `protocol`='{ret_name.lower()}' AND `ip`='{ip}' AND `port`={port}"
 			else:
-				query = f"SELECT `imei` FROM {ret_name.lower()}"
+				query = f"SELECT `imei` FROM `{RET_TABLE}` where `protocol`='{ret_name.lower()}'"
 				
 			cursor.execute(query)
 			all_imei_by_ret[ret_name] = []
@@ -158,7 +158,7 @@ def send_row(connection, row, retranslator, update=True):
 	
 	trackers = []
 	with connection.cursor() as cursor:
-		query = f'SELECT * FROM `{retranslator.protocol_name.lower()}` WHERE `imei`={row["imei"]}'
+		query = f"SELECT * FROM `{RET_TABLE}` WHERE `protocol`='{retranslator.protocol_name.lower()}' AND `imei`={row['imei']}"
 		cursor.execute(query)
 		if cursor.rowcount>0:
 			trackers = cursor.fetchall()

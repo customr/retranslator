@@ -53,28 +53,11 @@ def check_log_size():
 		if (os.path.getsize('src/logs/history.log')/1024) > 1024*10*10:
 			open('src/logs/history.log', 'w').close()
 		
-		if (os.path.getsize('tracker_receiver/src/logs/debug.log')/1024) > 1024*10*10:
-			open('tracker_receiver/src/logs/debug.log', 'w').close()
+		if (os.path.getsize('src/logs/debug.log')/1024) > 1024*10*10:
+			open('src/logs/debug.log', 'w').close()
 
 		time.sleep(60*60*4)
 
-
-#with closing(pymysql.connect(**CONN)) as connection:
-#	ipports = get_ipports(connection)
-#	c_per_th = 8
-#	servers_th = []
-#	
-#	for i in range(len(ipports)//c_per_th):
-#		servers_th.append(ipports[i*c_per_th:i*c_per_th+c_per_th])
-#	
-#	servers_th.append(ipports[len(ipports)//c_per_th*c_per_th+1:])
-#	assoc = {}
-#	
-#	for n, th in enumerate(servers_th):
-#		for ipport in th:
-#			assoc.update({f"{ipport[0]}:{ipport[1]}": n})
-#	
-#	print(assoc)
 
 recv_th = threading.Thread(target=receiver).start()
 cls_th  = threading.Thread(target=check_log_size).start()

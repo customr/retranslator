@@ -429,14 +429,28 @@ class GalileoSkyTrackerEmu(Retranslator):
 		"""
 		
 		if action=='posinfo':
-			data['sat_num'] == 0b1111 if data['sat_num']>0b1111 else data['sat_num']
+			data['sat_num'] = 0b1111 if data['sat_num']>0b1111 else data['sat_num']
 			data['lat'] *= 1000000
 			data['lon'] *= 1000000
 			data['lat'] = int(data['lat'])
 			data['lon'] = int(data['lon'])
 			data['speed'] *= 10
 			data['speed'] = int(data['speed'])
-			data['ignsens'] = data['sensor']<<1+data['ignition']
+			data['ignsens'] = ((data['sensor'] ^ 1)<<2)+data['ignition']
+			if not data.get('temp'):
+				if not data.get('temp2'):
+					data['temp'] = 0
+				else:
+					data['temp'] = data['temp2']
+ 
+			data['temp'] = int(data['temp'])
+			if data['temp']>120:
+				data['temp'] = 0
+ 
+			if not data.get('voltage'):
+				data['voltage'] = 0
+			else:
+				data['voltage'] = int(data['voltage']*1000)
 
 		fmt = self.protocol['FORMATS'][action]
 		params = self.protocol['ACTIONS'][action]

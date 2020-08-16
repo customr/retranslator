@@ -16,7 +16,12 @@
             "spd": "H",
             "dir": "H",
             "t4": "B",
-            "dinp": "H"
+            "dinp": "H",
+            "t5": "B",
+            "tempid": "B",
+            "temp": "b",
+            "t6": "B",
+            "voltage": "H"
         }
     },
     "ACTIONS" : {
@@ -34,8 +39,14 @@
             "lon": "&lon",
             "t3": 51,
             "spd": "&speed",
+            "dir": "&direction",
             "t4": 70,
-            "dinp": "&ignsens"
+            "dinp": "&ignsens",
+            "t5": 112,
+            "tempid": 1,
+            "temp": "&temp",
+            "t6": 65,
+            "voltage": "&voltage"
         }
     } 
 }
