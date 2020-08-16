@@ -63,7 +63,7 @@ recv_th = threading.Thread(target=receiver).start()
 cls_th  = threading.Thread(target=check_log_size).start()
 
 send_th = []
-send_th.append(threading.Thread(target=sender, args=('EgtsRetranslator',0,)))
-send_th.append(threading.Thread(target=sender, args=('WialonRetranslator',1,)))
-send_th.append(threading.Thread(target=sender, args=('WialonIPSRetranslator',2,)))
-send_th.append(threading.Thread(target=sender, args=('GalileoSkyTrackerEmu',3,)))
+send_th.append(threading.Thread(target=sender, args=('Egts',0,)))
+send_th.append(threading.Thread(target=sender, args=('Wialon',1,)))
+send_th.append(threading.Thread(target=sender, args=('WialonIPS',2,)))
+send_th.append(threading.Thread(target=sender, args=('GalileoSky',3,)))

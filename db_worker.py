@@ -9,25 +9,25 @@ from queue import Queue
 from datetime import datetime
 
 from src.core import TCPConnections
-from src.retranslators import WialonRetranslator, EGTS, WialonIPS, GalileoSkyTrackerEmu
+from src.retranslators import Wialon, EGTS, WialonIPS, GalileoSky
 from src.logs.log_config import logger
 from db_connect import *
 
 RETRANSLATORS_ALL = (
-	'WialonIPSRetranslator',
-	'EgtsRetranslator',
-	'WialonRetranslator',
-	'GalileoSkyTrackerEmu'
+	'WialonIPS',
+	'Egts',
+	'Wialon',
+	'GalileoSky'
 )
 
 RETRANSLATORS = {
-	'EgtsRetranslator'		: 	EGTS(),
-	'WialonRetranslator'	: 	WialonRetranslator(),
-	'WialonIPSRetranslator'	:	WialonIPS(),
-	'GalileoSkyTrackerEmu'  : 	GalileoSkyTrackerEmu()
+	'Egts'		: 	EGTS(),
+	'Wialon'	: 	Wialon(),
+	'WialonIPS'	:	WialonIPS(),
+	'GalileoSky': 	GalileoSky()
 }
 
-
+RETRANSLATOR_IDS = {ret.lower():n for ret, n in zip(RETRANSLATORS_ALL, range(len(RETRANSLATORS_ALL)))}
 rec_que = {ret:Queue() for ret in RETRANSLATORS_ALL}
 ignored_imei = {}
 
@@ -42,7 +42,7 @@ def get_ipports(connection, ret=None):
 		
 	for ret_name in retall:
 		with connection.cursor() as cursor:
-			query = f"SELECT DISTINCT ip, port FROM `{RET_TABLE}` WHERE `protocol`='{ret_name.lower()}'"
+			query = f"SELECT DISTINCT ip, port FROM `{RET_TABLE}` WHERE `protocol`={RETRANSLATOR_IDS[ret_name.lower()]}"
 			cursor.execute(query)
 			if not ret:
 				logger.info(f'{cursor.rowcount} соединений для {ret_name}\n')
@@ -112,9 +112,9 @@ def get_all_imei(connection, ip=None, port=None):
 	for ret_name in RETRANSLATORS_ALL:
 		with connection.cursor() as cursor:
 			if ip and port:
-				query = f"SELECT `imei` FROM `{RET_TABLE}` WHERE `protocol`='{ret_name.lower()}' AND `ip`='{ip}' AND `port`={port}"
+				query = f"SELECT `imei` FROM `{RET_TABLE}` WHERE `protocol`={RETRANSLATOR_IDS[ret_name.lower()]} AND `ip`='{ip}' AND `port`={port}"
 			else:
-				query = f"SELECT `imei` FROM `{RET_TABLE}` where `protocol`='{ret_name.lower()}'"
+				query = f"SELECT `imei` FROM `{RET_TABLE}` where `protocol`={RETRANSLATOR_IDS[ret_name.lower()]}"
 				
 			cursor.execute(query)
 			all_imei_by_ret[ret_name] = []
@@ -158,7 +158,7 @@ def send_row(connection, row, retranslator, update=True):
 	
 	trackers = []
 	with connection.cursor() as cursor:
-		query = f"SELECT * FROM `{RET_TABLE}` WHERE `protocol`='{retranslator.protocol_name.lower()}' AND `imei`={row['imei']}"
+		query = f"SELECT * FROM `{RET_TABLE}` WHERE `protocol`={RETRANSLATOR_IDS[ret_name.lower()]} AND `imei`={row['imei']}"
 		cursor.execute(query)
 		if cursor.rowcount>0:
 			trackers = cursor.fetchall()
@@ -195,7 +195,7 @@ def send_row(connection, row, retranslator, update=True):
 			msg += "Статус отправки".ljust(26, '-')+f"{status}\n"
 			msg += "Затраченное время (сек)".ljust(26, '-')+"{:.2f}\n".format(elapsed_time)
 			for ret, x in rec_que.items():
-				msg += f"Записей для {ret[:-12]}".ljust(26, '-')+f"{x.qsize()}\n"
+				msg += f"Записей для {ret}".ljust(26, '-')+f"{x.qsize()}\n"
 			
 			if not sended:
 				logger.error(msg)

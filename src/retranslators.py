@@ -9,7 +9,7 @@ from src.core import Retranslator, TCPConnections
 from src.crc import crc8, crc16, crc16_arc, crc16_modbus
 from src.utils import *
 
-class WialonRetranslator(Retranslator):
+class Wialon(Retranslator):
 
 	FLAGS = 1 #битовая маска пакета (местоположение)
 	DATATYPES = { #всевозможноые типы блока данных описанных в документации
@@ -24,7 +24,7 @@ class WialonRetranslator(Retranslator):
 		"""WialonRetranslator протокол
 		https://gurtam.com/hw/files/Wialon%20Retranslator_v1.pdf
 		"""
-		super().__init__("WialonRetranslator")
+		super().__init__("Wialon")
 		
 	
 	def send(self, ip, port, row):
@@ -96,7 +96,7 @@ class EGTS(Retranslator):
 		https://www.swe-notes.ru/post/protocol-egts/
 		"""
 
-		super().__init__("EgtsRetranslator")
+		super().__init__("Egts")
 		self.data = {"pid":0, "rid":0}
 		self.auth_imei = {}
 
@@ -261,7 +261,7 @@ class WialonIPS(Retranslator):
 		"""WialonIPS протокол
 		http://extapi.wialon.com/hw/cfg/Wialon%20IPS_v_2_0.pdf
 		"""
-		super().__init__("WialonIPSRetranslator")
+		super().__init__("WialonIPS")
 		self.auth_imei = {}
 
 
@@ -387,12 +387,12 @@ class WialonIPS(Retranslator):
 		return data
 
 
-class GalileoSkyTrackerEmu(Retranslator):
+class GalileoSky(Retranslator):
 	def __init__(self):
 		"""Galileosky протокол (эмуляция трекера)
 		https://7gis.ru/assets/files/docs/manuals_ru/opisanie-protokola-obmena-s-serverom.pdf
 		"""
-		super().__init__('GalileoSkyTrackerEmu')
+		super().__init__('GalileoSky')
 		self.auth_imei = {}
 
 	
