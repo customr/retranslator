@@ -142,6 +142,7 @@ class Retranslator:
 		
 		self.packet = bytes()
 		self.data = {}
+		self.settings = {}
 
 		self.protocol = Retranslator.get_json(self.PROTOCOLS_DIR, self.protocol_name+".json")
 		logger.info(f"Протокол {protocol_name} инициализирован\n")

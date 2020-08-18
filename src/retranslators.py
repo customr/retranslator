@@ -27,8 +27,10 @@ class Wialon(Retranslator):
 		super().__init__("Wialon")
 		
 	
-	def send(self, ip, port, row):
+	def send(self, ip, port, row, settings):
 		self.data = {}
+		self.settings = settings
+
 		if not isinstance(row['datetime'], int):
 			row['datetime'] = int(Retranslator.utc_to_local(row['datetime']).timestamp())
 		packet = self.pack_record(**row)
@@ -101,7 +103,9 @@ class EGTS(Retranslator):
 		self.auth_imei = {}
 
 
-	def send(self, ip, port, row):
+	def send(self, ip, port, row, settings):
+		self.settings = settings
+
 		if isinstance(row['datetime'], datetime):
 			row['datetime'] = int(row['datetime'].timestamp())
 			
@@ -265,8 +269,10 @@ class WialonIPS(Retranslator):
 		self.auth_imei = {}
 
 
-	def send(self, ip, port, row):
+	def send(self, ip, port, row, settings):
 		self.data = {}
+		self.settings = settings
+
 		if isinstance(row['datetime'], datetime):
 			row['datetime'] = int(row['datetime'].timestamp())
 			
@@ -394,13 +400,14 @@ class GalileoSky(Retranslator):
 		"""
 		super().__init__('GalileoSky')
 		self.auth_imei = {}
-
 	
-	def send(self, ip, port, row):
+
+	def send(self, ip, port, row, settings):
 		self.data = {}
-		
+		self.settings = settings
+
 		if isinstance(row['datetime'], datetime):
-			row['datetime'] = int(row['datetime'].timestamp())
+			row['datetime'] = int(Retranslator.utc_to_local(row['datetime']).timestamp())
 		
 		if str(row['imei'])!=self.auth_imei.get(f"{ip}:{port}"):
 			if self.auth_imei.get(f"{ip}:{port}", None):
@@ -429,6 +436,11 @@ class GalileoSky(Retranslator):
 		"""
 		
 		if action=='posinfo':
+			if self.settings['sensor_inversion']:
+				inversion = 1
+			else:
+				inversion = 0
+
 			data['sat_num'] = 0b1111 if data['sat_num']>0b1111 else data['sat_num']
 			data['lat'] *= 1000000
 			data['lon'] *= 1000000
@@ -436,7 +448,7 @@ class GalileoSky(Retranslator):
 			data['lon'] = int(data['lon'])
 			data['speed'] *= 10
 			data['speed'] = int(data['speed'])
-			data['ignsens'] = ((data['sensor'] ^ 1)<<2)+data['ignition']
+			data['ignsens'] = ((data['sensor'] ^ inversion)<<2)+data['ignition']
 			if not data.get('temp'):
 				if not data.get('temp2'):
 					data['temp'] = 0

@@ -27,7 +27,7 @@ RETRANSLATORS = {
 	'GalileoSky': 	GalileoSky()
 }
 
-RETRANSLATOR_IDS = {ret.lower():n for ret, n in zip(RETRANSLATORS_ALL, range(len(RETRANSLATORS_ALL)))}
+RETRANSLATOR_IDS = {ret.lower():n for ret, n in zip(RETRANSLATORS_ALL, range(1, len(RETRANSLATORS_ALL))+1)}
 rec_que = {ret:Queue() for ret in RETRANSLATORS_ALL}
 ignored_imei = {}
 
@@ -158,7 +158,7 @@ def send_row(connection, row, retranslator, update=True):
 	
 	trackers = []
 	with connection.cursor() as cursor:
-		query = f"SELECT * FROM `{RET_TABLE}` WHERE `protocol`={RETRANSLATOR_IDS[ret_name.lower()]} AND `imei`={row['imei']}"
+		query = f"SELECT * FROM `{RET_TABLE}` WHERE `protocol`={RETRANSLATOR_IDS[retranslator.protocol_name.lower()]} AND `imei`={row['imei']}"
 		cursor.execute(query)
 		if cursor.rowcount>0:
 			trackers = cursor.fetchall()
@@ -176,7 +176,9 @@ def send_row(connection, row, retranslator, update=True):
 		if TCPConnections.CONNECTED.get(tn, ''):
 			tm = time.time()
 			
-			sended, status = retranslator.send(tracker['ip'], tracker['port'], row)
+			settings = get_settings(connection, retranslator.protocol_name.lower(), row['imei'])
+			sended, status = retranslator.send(tracker['ip'], tracker['port'], row, settings)
+
 			sended_all.update({tn: status})
 			
 			if sended:
@@ -247,3 +249,16 @@ def receive_rows(connection, ret_name, tstart):
 	logger.info(m)
 	
 	return not_emp
+
+
+def get_settings(connection, ret_name, imei):
+	protocol_id = RETRANSLATOR_IDS[ret_name.lower()]
+	query = f"SELECT `settings` FROM `retranslate_settings` WHERE `protocol`={protocol_id} AND `imei`={int(imei)}"
+	with connection.cursor() as cursor:
+		cursor.execute(query)
+		if cursor.rowcount!=0:
+			settings = loads(cursor.fetchone()['settings'])
+		else:
+			settings = {}
+
+	return settings
