@@ -1,4 +1,4 @@
-import os
+﻿import os
 import struct
 import socket
 import threading
@@ -47,7 +47,7 @@ class TCPConnections:
 
 					n += 1
 
-				sleep(30)
+				sleep(10)
 			
 			except Exception as e:
 				logger.error(f"Ошибка в функции переподключения ({e})")
@@ -70,7 +70,7 @@ class TCPConnections:
 
 	@staticmethod
 	def connect(ip, port):
-		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		sock = socket.socket()
 		sock.settimeout(2)
 
 		try:
@@ -82,7 +82,6 @@ class TCPConnections:
 		except Exception as e:
 			logger.debug(f'Не удалось установить соединение ({e})'+ f"\n[{ip}:{port}] ")
 			return -1
-
 
 	@staticmethod
 	def send(ip, port, bmsg:bytes):

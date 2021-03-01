@@ -80,10 +80,12 @@ class Wialon(Retranslator):
 		self.add_template('sens', sens=data["sensor"])
 		
 		if data.get('t_ret', None):
-			self.add_template('temp', temp=data["t_ret"])
+			if data["t_ret"]<50:
+				self.add_template('temp', temp=data["t_ret"])
 		
 		elif data.get('temp', None):
-			self.add_template('temp', temp=data["temp"])
+			if data["temp"]<50:
+				self.add_template('temp', temp=data["temp"])
 
 		packet_size = len(self.packet)
 		packet_size = struct.pack("<I", packet_size)
@@ -423,7 +425,11 @@ class GalileoSky(Retranslator):
 			self.auth_imei[f"{ip}:{port}"] = str(row['imei'])
 		
 		packet = b''
-		packet = self.add_block('posinfo', **row)
+		try:
+			packet = self.add_block('posinfo', **row)
+		except Exception as e:
+			logger.error(e)
+			return 0, str(e)
 		response = TCPConnections.send(ip, port, packet)
 		return 1, response
 		
@@ -436,10 +442,13 @@ class GalileoSky(Retranslator):
 		"""
 		
 		if action=='posinfo':
-			if self.settings['sensor_inversion']:
-				inversion = 1
+			if self.settings.get('sensor_inversion', None):
+				if int(self.settings['sensor_inversion'])==1:
+					inversion = 1
+				else:
+					inversion = 0
 			else:
-				inversion = 0
+				inversion = 1
 
 			data['sat_num'] = 0b1111 if data['sat_num']>0b1111 else data['sat_num']
 			data['lat'] *= 1000000
@@ -448,15 +457,21 @@ class GalileoSky(Retranslator):
 			data['lon'] = int(data['lon'])
 			data['speed'] *= 10
 			data['speed'] = int(data['speed'])
-			data['ignsens'] = ((data['sensor'] ^ inversion)<<2)+data['ignition']
-			if not data.get('temp'):
-				if not data.get('temp2'):
-					data['temp'] = 0
+			data['ignsens'] = (data['sensor'] ^ inversion)<<2#+data['ignition']
+			if not data.get('t_ret', None):
+				if not data.get('temp', None):
+					if not data.get('temp2', None):
+						data['temp'] = 0
+					else:
+						data['temp'] = int(data['temp2'])
 				else:
-					data['temp'] = data['temp2']
- 
-			data['temp'] = int(data['temp'])
-			if data['temp']>120:
+					data['temp'] = int(data['temp'])
+			else:
+				data['temp'] = int(data['t_ret'])
+
+			if data['temp']>128:
+				data['temp'] = 0
+			elif data['temp']<-127:
 				data['temp'] = 0
  
 			if not data.get('voltage'):

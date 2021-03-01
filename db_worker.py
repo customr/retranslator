@@ -27,7 +27,7 @@ RETRANSLATORS = {
 	'GalileoSky': 	GalileoSky()
 }
 
-RETRANSLATOR_IDS = {ret.lower():n for ret, n in zip(RETRANSLATORS_ALL, range(1, len(RETRANSLATORS_ALL))+1)}
+RETRANSLATOR_IDS = {ret.lower():n for ret, n in zip(RETRANSLATORS_ALL, range(1, len(RETRANSLATORS_ALL)+1))}
 rec_que = {ret:Queue() for ret in RETRANSLATORS_ALL}
 ignored_imei = {}
 
@@ -99,7 +99,13 @@ def check_records(connection, ip, port, ret=None):
 	if not ret:
 		logger.info(f"$ Всего машин для {ip}:{port} - {len(all_imei)}\n")
 	count = 0
+	if ret=='Egts' and int(port)==47750:
+		c = check_records_for_imei('862531040572670')
+		count += c
 	for imei in all_imei:
+		if ret=='Egts' and int(port)==47750:
+			if imei=='862531040572670':
+				continue
 		c = check_records_for_imei(imei)
 		count += c
 		
