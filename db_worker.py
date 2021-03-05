@@ -9,7 +9,7 @@ from queue import Queue
 from datetime import datetime
 
 from src.core import TCPConnections
-from src.retranslators import Wialon, EGTS, WialonIPS, GalileoSky, EgtsNoAuth
+from src.retranslators import Wialon, EGTS, WialonIPS, GalileoSky, EGTSNoAuth
 from src.logs.log_config import logger
 from db_connect import *
 
@@ -18,7 +18,7 @@ RETRANSLATORS_ALL = (
 	'Egts',
 	'Wialon',
 	'GalileoSky',
-	'EgtsNoAuth'
+	'EGTSNoAuth'
 )
 
 RETRANSLATORS = {
@@ -26,7 +26,7 @@ RETRANSLATORS = {
 	'Wialon'	: 	Wialon(),
 	'WialonIPS'	:	WialonIPS(),
 	'GalileoSky': 	GalileoSky(),
-	'EgtsNoAuth':	EgtsNoAuth()
+	'EgtsNoAuth':	EGTSNoAuth()
 }
 
 RETRANSLATOR_IDS = {ret.lower():n for ret, n in zip(RETRANSLATORS_ALL, range(1, len(RETRANSLATORS_ALL)+1))}
