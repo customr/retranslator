@@ -31,14 +31,6 @@ RETRANSLATORS = {
 
 RETRANSLATOR_IDS = {ret.lower():n for ret, n in zip(RETRANSLATORS_ALL, range(1, len(RETRANSLATORS_ALL)+1))}
 
-with closing(pymysql.connect(**CONN)) as connection:
-	rec_que = {f'{ip}:{port}':Queue() for ip, port in get_ipports(connection)} 
-	ret_by_ipport = {ret:get_ipports(connection, ret) for ret in RETRANSLATORS_ALL}
-
-ignored_imei = {}
-
-
-
 def get_ipports(connection, ret=None):
 	ipport_tuple = []
 	if ret:
@@ -58,6 +50,14 @@ def get_ipports(connection, ret=None):
 					ipport_tuple.append((row['ip'], int(row['port'])))
 	
 	return ipport_tuple
+
+
+with closing(pymysql.connect(**CONN)) as connection:
+	rec_que = {f'{ip}:{port}':Queue() for ip, port in get_ipports(connection)} 
+	ret_by_ipport = {ret:get_ipports(connection, ret) for ret in RETRANSLATORS_ALL}
+
+ignored_imei = {}
+
 
 
 def check_records(connection, ip, port, ret=None):
@@ -211,7 +211,7 @@ def send_row(connection, row, retranslator, update=True):
 			msg += "Статус отправки".ljust(26, '-')+f"{status}\n"
 			msg += "Затраченное время (сек)".ljust(26, '-')+"{:.2f}\n".format(elapsed_time)
 			for ret, x in rec_que.items():
-				msg += f"Записей для {ret}".ljust(26, '-')+f"{x.qsize()}\n"
+				msg += f"Записей для {ret}".ljust(48, '-')+f"{x.qsize()}\n"
 			
 			if not sended:
 				logger.error(msg)
@@ -237,17 +237,23 @@ def send_row(connection, row, retranslator, update=True):
 	return sended_all
 	
 	
-def receive_rows(connection, ret_name, tstart):
+def get_retranslator(ip, port):
+	for ret, ipports in ret_by_ipport.items():
+		if (ip, port) in ipports:
+			return ret
+
+
+def receive_rows(connection, ip, port, tstart):
 	not_emp = 0
+	ret_name = get_retranslator(ip, port)
 	ipports = get_ipports(connection, ret_name)
-	for ip, port in ipports:
-		if not TCPConnections.CONNECTED.get(f'{ip}:{port}', None):
-			if (ip, port) not in TCPConnections.NOT_CONNECTED:
-				TCPConnections.NOT_CONNECTED.append((ip, port))
-			
-			continue
-			
-		not_emp += check_records(connection, ip, port, ret_name)
+	if not TCPConnections.CONNECTED.get(f'{ip}:{port}', None):
+		if (ip, port) not in TCPConnections.NOT_CONNECTED:
+			TCPConnections.NOT_CONNECTED.append((ip, port))
+		
+		continue
+		
+	not_emp += check_records(connection, ip, port, ret_name)
 		
 	len_s = len(TCPConnections.NOT_CONNECTED)+len(TCPConnections.CONNECTED)
 	
@@ -276,9 +282,3 @@ def get_settings(connection, ret_name, imei):
 			settings = {}
 
 	return settings
-
-
-def get_retranslator(ip, port):
-	for ret, ipports in ret_by_ipport.items():
-		if (ip, port) in ipports:
-			return RETRANSLATORS[ret]

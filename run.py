@@ -31,8 +31,9 @@ def receiver():
 			threading.Thread(target=sender, args=(ipport, )).start()
 			
 		while True:
-			for ret_name in RETRANSLATORS_ALL:
-				receive_rows(connection, ret_name, tstart)
+			for ipport in ret_que.keys():
+				ip, port = ipport.split(':')
+				receive_rows(connection, ip, port, tstart)
 				connection.commit()
 			
 			time.sleep(DELAY)
@@ -41,7 +42,7 @@ def receiver():
 def sender(ipport):
 	with closing(pymysql.connect(**CONN)) as connection:
 		ip, port = ipport.split(':')
-		retranslator = get_retranslator(ip, port)
+		retranslator = RETRANSLATORS[get_retranslator(ip, port)]
 		while True:
 			row = rec_que[ipport].get()
 			send_row(connection, row, retranslator, True)
