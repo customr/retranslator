@@ -166,7 +166,7 @@ class EGTSNoAuth(Retranslator):
 	def pack_record(self, **data):
 		self.packet = bytes()
 
-		rdata = {key:data[key] for key in ['lon', 'lat', 'speed', 'direction', 'sat_num', 'sensor', 'ignition', 'datetime']}
+		rdata = {key:data[key] for key in ['imei', 'lon', 'lat', 'speed', 'direction', 'sat_num', 'sensor', 'ignition', 'datetime']}
 		rdata['lat'] = self.get_lat(rdata['lat'])
 		rdata['lon'] = self.get_lon(rdata['lon'])
 		rdata.update({"din": rdata['sensor']})

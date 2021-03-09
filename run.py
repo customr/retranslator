@@ -27,25 +27,25 @@ def receiver():
 			mid = cursor.fetchone()['MAX(`id`)']
 			from_id = {ret: deepcopy(mid) for ret in RETRANSLATORS_ALL}
 
-		for th in send_th:
-			th.start()
+		for ipport in rec_que.keys():
+			threading.Thread(target=sender, args=(ipport, )).start()
 			
 		while True:
 			for ret_name in RETRANSLATORS_ALL:
-				if rec_que[ret_name].qsize()==0:
-					receive_rows(connection, ret_name, tstart)
-					connection.commit()
+				receive_rows(connection, ret_name, tstart)
+				connection.commit()
 			
 			time.sleep(DELAY)
 
 
-def sender(ret, th):
+def sender(ipport):
 	with closing(pymysql.connect(**CONN)) as connection:
+		ip, port = ipport.split(':')
+		retranslator = get_retranslator(ip, port)
 		while True:
-			row = rec_que[ret].get()
-			retranslator = RETRANSLATORS[ret]
+			row = rec_que[ipport].get()
 			send_row(connection, row, retranslator, True)
-			rec_que[ret].task_done()
+			rec_que[ipport].task_done()
 
 
 def check_log_size():
@@ -61,10 +61,3 @@ def check_log_size():
 
 recv_th = threading.Thread(target=receiver).start()
 cls_th  = threading.Thread(target=check_log_size).start()
-
-send_th = []
-send_th.append(threading.Thread(target=sender, args=('Egts',0,)))
-send_th.append(threading.Thread(target=sender, args=('Wialon',1,)))
-send_th.append(threading.Thread(target=sender, args=('WialonIPS',2,)))
-send_th.append(threading.Thread(target=sender, args=('GalileoSky',3,)))
-send_th.append(threading.Thread(target=sender, args=('EGTSNoAuth',4,)))

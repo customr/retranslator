@@ -26,11 +26,15 @@ RETRANSLATORS = {
 	'Wialon'	: 	Wialon(),
 	'WialonIPS'	:	WialonIPS(),
 	'GalileoSky': 	GalileoSky(),
-	'EgtsNoAuth':	EGTSNoAuth()
+	'EGTSNoAuth':	EGTSNoAuth()
 }
 
 RETRANSLATOR_IDS = {ret.lower():n for ret, n in zip(RETRANSLATORS_ALL, range(1, len(RETRANSLATORS_ALL)+1))}
-rec_que = {ret:Queue() for ret in RETRANSLATORS_ALL}
+
+with closing(pymysql.connect(**CONN)) as connection:
+	rec_que = {f'{ip}:{port}':Queue() for ip, port in get_ipports(connection)} 
+	ret_by_ipport = {ret:get_ipports(connection, ret) for ret in RETRANSLATORS_ALL}
+
 ignored_imei = {}
 
 
@@ -58,6 +62,8 @@ def get_ipports(connection, ret=None):
 
 def check_records(connection, ip, port, ret=None):
 	def check_records_for_imei(imei):
+		nonlocal ip, port
+
 		with connection.cursor() as cursor:
 			query = f"SELECT MAX(`id`) FROM `sent_id` WHERE `ip`='{ip}' AND `port`={port} AND `imei`={imei}"
 			cursor.execute(query)
@@ -88,7 +94,7 @@ def check_records(connection, ip, port, ret=None):
 				if (row.get('lat', None) is not None) and (row['datetime'].timestamp()>0):
 					for ret_name in retall:
 							if row['imei'] in imei_by_ret[ret_name]:
-								rec_que[ret_name].put(row)
+								rec_que[f'{ip}:{port}'].put(row)
 					
 					notemp += 1
 			
@@ -270,3 +276,9 @@ def get_settings(connection, ret_name, imei):
 			settings = {}
 
 	return settings
+
+
+def get_retranslator(ip, port):
+	for ret, ipports in ret_by_ipport.items():
+		if (ip, port) in ipports:
+			return RETRANSLATORS[ret]
