@@ -20,6 +20,6 @@ cls_th  = threading.Thread(target=check_log_size).start()
 
 with closing(pymysql.connect(**CONN)) as connection:
 	for t in get_trackers(connection):
-		ret = RETRANSLATOR_NAMES[t['protocol']]
-		tracker = Tracker(connection, t['imei'], ret, t['ip'], t['port'])
+		ret = RETRANSLATORS[RETRANSLATOR_NAMES[t['protocol']]]
+		tracker = Tracker(t['imei'], ret, t['ip'], t['port'])
 		TRACKERS.append(tracker)

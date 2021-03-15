@@ -2,7 +2,9 @@ import pymysql
 import time
 import os
 import socket
+import threading
 
+from time import sleep
 from copy import deepcopy
 from contextlib import closing
 from json import loads
@@ -22,11 +24,11 @@ RETRANSLATORS_ALL = (
 )
 
 RETRANSLATORS = {
-	'Egts'		: 	EGTS(),
-	'Wialon'	: 	Wialon(),
-	'WialonIPS'	:	WialonIPS(),
-	'GalileoSky': 	GalileoSky(),
-	'EGTSNoAuth':	EGTSNoAuth()
+	'egts'		: 	EGTS(),
+	'wialon'	: 	Wialon(),
+	'wialonips'	:	WialonIPS(),
+	'galileosky': 	GalileoSky(),
+	'egtsnoauth':	EGTSNoAuth()
 }
 
 RETRANSLATOR_IDS = {ret.lower():n for ret, n in zip(RETRANSLATORS_ALL, range(1, len(RETRANSLATORS_ALL)+1))}
@@ -36,17 +38,19 @@ class Tracker:
 
 	CONN_DELAY = 1
 
-	def __init__(self, dbconn, imei, retranslator, ip, port):
+	def __init__(self, imei, retranslator, ip, port):
 		self.ip = ip
 		self.port = port
 		self.imei = imei
-		self.dbconn = dbconn
+		self.dbconn = pymysql.connect(**CONN)
 		self.retranslator = retranslator
-		self.retranslator_id = RETRANSLATOR_IDS[self.protocol.protocol_name.lower()]
-		self.settings = get_settings(self.dbconn, self.retranslator.protocol_name.lower(), self.imei)
+		self.retranslator_id = RETRANSLATOR_IDS[self.retranslator.protocol_name.lower()]
+		self.settings = self.get_settings()
 
 		self.queue = Queue()
 		self.socket = -1
+
+		logger.info(f"START {self.retranslator.protocol_name} {self.imei} [{self.ip}:{self.port}]")
 
 		send_th = threading.Thread(target=self.sender)
 		send_th.start()
@@ -66,11 +70,11 @@ class Tracker:
 		sock = socket.socket()
 		sock.settimeout(1)
 		try:
-			sock.connect((ip, port))
+			sock.connect((self.ip, int(self.port)))
 			return sock
 
 		except Exception as e:
-			logger.debug(f'Не удалось установить соединение ({e})'+ f"\n{self.imei} [{ip}:{port}] ")
+			logger.debug(f'Не удалось установить соединение ({e})'+ f"\n{self.imei} [{self.ip}:{self.port}] ")
 			return -1
 
 	def fill_queue(self):
@@ -104,7 +108,7 @@ class Tracker:
 		while True:
 			while self.socket==-1:
 				self.socket = self.connect()
-				sleep(CONN_DELAY)
+				sleep(Tracker.CONN_DELAY)
 
 			while self.queue.qsize()==0:
 				self.fill_queue()
