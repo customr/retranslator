@@ -3,6 +3,7 @@ import threading
 from db_worker import *
 from db_connect import *
 
+TRACKERS = []
 
 def check_log_size():
 	while True:
@@ -18,8 +19,7 @@ def check_log_size():
 cls_th  = threading.Thread(target=check_log_size).start()
 
 with closing(pymysql.connect(**CONN)) as connection:
-	_, all_imei_by_ret = get_all_imei(connection)
-	for d in all_imei_by_ret:
-		ret = get_retranslator(d['ip'], d['port'])
-		ret = RETRANSLATORS[ret]
-		Tracker(connection, d['imei'], ret, d['ip'], d['port'])
+	for t in get_trackers(connection):
+		ret = RETRANSLATOR_NAMES[t['protocol']]
+		tracker = Tracker(connection, t['imei'], ret, t['ip'], t['port'])
+		TRACKERS.append(tracker)

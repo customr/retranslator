@@ -9,7 +9,6 @@ from json import loads
 from queue import Queue
 from datetime import datetime
 
-from src.core import TCPConnections
 from src.retranslators import Wialon, EGTS, WialonIPS, GalileoSky, EGTSNoAuth
 from src.logs.log_config import logger
 from db_connect import *
@@ -31,7 +30,7 @@ RETRANSLATORS = {
 }
 
 RETRANSLATOR_IDS = {ret.lower():n for ret, n in zip(RETRANSLATORS_ALL, range(1, len(RETRANSLATORS_ALL)+1))}
-
+RETRANSLATOR_NAMES = {n:ret.lower() for ret, n in zip(RETRANSLATORS_ALL, range(1, len(RETRANSLATORS_ALL)+1))}
 
 class Tracker:
 
@@ -173,33 +172,10 @@ class Tracker:
 			return -1
 
 
-def get_all_imei(connection, ip=None, port=None):
-	all_imei = []
-	all_imei_by_ret = {}
-	for ret_name in RETRANSLATORS_ALL:
-		with connection.cursor() as cursor:
-			if ip and port:
-				query = f"SELECT `imei` FROM `{RET_TABLE}` WHERE `protocol`={RETRANSLATOR_IDS[ret_name.lower()]} AND `ip`='{ip}' AND `port`={port}"
-			else:
-				query = f"SELECT `imei` FROM `{RET_TABLE}` where `protocol`={RETRANSLATOR_IDS[ret_name.lower()]}"
-				
-			cursor.execute(query)
-			all_imei_by_ret[ret_name] = []
-			
-			for i in cursor.fetchall():
-				data = {
-					"imei": i['imei'],
-					"ip": ip,
-					"port": port
-				}
-				all_imei.append(data)
-				all_imei_by_ret[ret_name].append(data)
+def get_trackers(connection):
+	with connection.cursor() as cursor:
+		query = f"SELECT * FROM `retranslate_servers`"
+		cursor.execute(query)
+		trackers = cursor.fetchall()
 
-	return all_imei, all_imei_by_ret
-	
-
-def get_retranslator(ip, port):
-	for ret, ipports in ret_by_ipport.items():
-		if (ip, int(port)) in ipports:
-			return ret
-
+	return trackers
