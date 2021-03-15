@@ -3,51 +3,6 @@ import threading
 from db_worker import *
 from db_connect import *
 
-def receiver():
-	with closing(pymysql.connect(**CONN)) as connection:
-		tstart = time.time()
-		ipport_tuple = get_ipports(connection)
-		TCPConnections.connect_many(ipport_tuple)
-		from_id = {}
-
-		connected = []
-		total_count = 0
-		connected_now = [x for x in TCPConnections.CONNECTED.keys()]
-		
-		for conn in connected_now:
-			ip, port = conn.split(':')
-			c = check_records(connection, ip, port)
-			total_count += c
-
-		logger.info(f"ИТОГО - {total_count} старых записей будут отправлены\n")
-
-		with connection.cursor() as cursor:
-			query = f'SELECT MAX(`id`) FROM `{RECORDS_TBL}`'
-			cursor.execute(query)
-			mid = cursor.fetchone()['MAX(`id`)']
-			from_id = {ret: deepcopy(mid) for ret in RETRANSLATORS_ALL}
-
-		for ipport in rec_que.keys():
-			threading.Thread(target=sender, args=(ipport, )).start()
-			
-		while True:
-			for ipport in ret_que.keys():
-				ip, port = ipport.split(':')
-				receive_rows(connection, ip, port, tstart)
-				connection.commit()
-			
-			time.sleep(DELAY)
-
-
-def sender(ipport):
-	with closing(pymysql.connect(**CONN)) as connection:
-		ip, port = ipport.split(':')
-		retranslator = RETRANSLATORS[get_retranslator(ip, port)]
-		while True:
-			row = rec_que[ipport].get()
-			send_row(connection, row, retranslator, True)
-			rec_que[ipport].task_done()
-
 
 def check_log_size():
 	while True:
@@ -60,5 +15,11 @@ def check_log_size():
 		time.sleep(60*60*4)
 
 
-recv_th = threading.Thread(target=receiver).start()
 cls_th  = threading.Thread(target=check_log_size).start()
+
+with closing(pymysql.connect(**CONN)) as connection:
+	_, all_imei_by_ret = get_all_imei(connection)
+	for d in all_imei_by_ret:
+		ret = get_retranslator(d['ip'], d['port'])
+		ret = RETRANSLATORS[ret]
+		Tracker(connection, d['imei'], ret, d['ip'], d['port'])

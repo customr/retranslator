@@ -5,7 +5,7 @@ from datetime import datetime
 from binascii import hexlify, a2b_hex
 
 from src.logs.log_config import logger
-from src.core import Retranslator, TCPConnections
+from src.core import Retranslator
 from src.crc import crc8, crc16, crc16_arc, crc16_modbus
 from src.utils import *
 
@@ -27,14 +27,14 @@ class Wialon(Retranslator):
 		super().__init__("Wialon")
 		
 	
-	def send(self, ip, port, row, settings):
+	def send(self, send, row, settings):
 		self.data = {}
 		self.settings = settings
 
 		if not isinstance(row['datetime'], int):
 			row['datetime'] = int(Retranslator.utc_to_local(row['datetime']).timestamp())
 		packet = self.pack_record(**row)
-		response = TCPConnections.send(ip, port, packet)
+		response = send(packet)
 		if response==b'11' or response==b'f0' or response==b'':
 			return 1, response
 		
@@ -104,14 +104,14 @@ class EGTSNoAuth(Retranslator):
 		self.data = {"pid":0, "rid":0}
 
 
-	def send(self, ip, port, row, settings):
+	def send(self, send, row, settings):
 		self.settings = settings
 
 		if isinstance(row['datetime'], datetime):
 			row['datetime'] = int(row['datetime'].timestamp())
 			
 		rec_packet = self.pack_record(**row)
-		response = TCPConnections.send(ip, port, rec_packet)
+		response = send(rec_packet)
 		if response==-1:
 			return 0, 0
 
@@ -119,8 +119,6 @@ class EGTSNoAuth(Retranslator):
 			return 1, response[-6:-4]
 				
 		else:
-			TCPConnections.close_conn(ip, port)
-			TCPConnections.NOT_CONNECTED.append((ip, port))
 			return 0, response[-6:-4]
 
 
@@ -232,7 +230,7 @@ class EGTS(Retranslator):
 		self.auth_imei = {}
 
 
-	def send(self, ip, port, row, settings):
+	def send(self, send, row, settings):
 		self.settings = settings
 
 		if isinstance(row['datetime'], datetime):
@@ -242,13 +240,13 @@ class EGTS(Retranslator):
 			self.auth_imei[f"{ip}:{port}"] = ''
 			self.packet = bytes()
 			self.add_template("authentication", imei=str(row['imei']))
-			if TCPConnections.send(ip, port, self.packet)==-1:
+			if send(self.packet)==-1:
 				return 0, 0
 			
 			self.auth_imei[f"{ip}:{port}"] = str(row['imei'])
 			
 		rec_packet = self.pack_record(**row)
-		response = TCPConnections.send(ip, port, rec_packet)
+		response = send(rec_packet)
 		if response==-1:
 			self.auth_imei[f"{ip}:{port}"]
 			return 0, 0
@@ -259,16 +257,10 @@ class EGTS(Retranslator):
 		elif response[-6:-4]==b'99' or response[-6:-4]==b'97':
 			logger.info("EGTS Необходима повторная авторизация\n")
 			self.auth_imei[f"{ip}:{port}"] = ''
-			TCPConnections.close_conn(ip, port)
-			if TCPConnections.connect(ip, int(port))==-1:
-				self.auth_imei[f"{ip}:{port}"] = ''
-				TCPConnections.NOT_CONNECTED.append((ip, port))
-				return 0, 0 
-				
 			self.data = {"pid":0, "rid":0}
 			self.packet = bytes()
 			self.add_template("authentication", imei=str(row['imei']))
-			response = TCPConnections.send(ip, port, self.packet)
+			response = send(self.packet)
 			if response==-1:
 				self.auth_imei[f"{ip}:{port}"] = ''
 				return 0, response
@@ -279,7 +271,7 @@ class EGTS(Retranslator):
 			else:
 				return 0, response[-6:-4]
 				
-			response = TCPConnections.send(ip, port, rec_packet)
+			response = send(rec_packet)
 			if response[-6:-4]==b'00':
 				return 1, response[-6:-4]
 			
@@ -287,8 +279,6 @@ class EGTS(Retranslator):
 				return 0, response[-6:-4]
 				
 		else:
-			TCPConnections.close_conn(ip, port)
-			TCPConnections.NOT_CONNECTED.append((ip, port))
 			return 0, response[-6:-4]
 
 
@@ -398,7 +388,7 @@ class WialonIPS(Retranslator):
 		self.auth_imei = {}
 
 
-	def send(self, ip, port, row, settings):
+	def send(self, send, row, settings):
 		self.data = {}
 		self.settings = settings
 
@@ -409,13 +399,9 @@ class WialonIPS(Retranslator):
 			if self.auth_imei.get(f"{ip}:{port}", None):
 				logger.info("WialonIPSRetranslator Необходима повторная авторизация\n")
 				self.auth_imei[f"{ip}:{port}"] = ''
-				TCPConnections.close_conn(ip, port)
-				if TCPConnections.connect(ip, int(port))==-1:
-					TCPConnections.NOT_CONNECTED.append((ip, port))
-					return 0, 0
 				
 			packet = self.add_block('authentication', imei=str(row['imei']))
-			response = TCPConnections.send(ip, port, packet)
+			response = send(packet)
 			if response==-1:
 				return 0, 0
 
@@ -435,7 +421,7 @@ class WialonIPS(Retranslator):
 					self.auth_imei[f"{ip}:{port}"] = str(row['imei'])
 		
 		packet = self.add_block('posinfo', **row)
-		response = TCPConnections.send(ip, port, packet)
+		response = send(packet)
 
 		if response==-1:
 			self.auth_imei[f"{ip}:{port}"] = ''
@@ -531,7 +517,7 @@ class GalileoSky(Retranslator):
 		self.auth_imei = {}
 	
 
-	def send(self, ip, port, row, settings):
+	def send(self, send, row, settings):
 		self.data = {}
 		self.settings = settings
 
@@ -542,13 +528,9 @@ class GalileoSky(Retranslator):
 			if self.auth_imei.get(f"{ip}:{port}", None):
 				logger.info("GalileoSkyTrackerEmu Необходима повторная авторизация\n")
 				self.auth_imei[f"{ip}:{port}"] = ''
-				TCPConnections.close_conn(ip, port)
-				if TCPConnections.connect(ip, int(port))==-1:
-					TCPConnections.NOT_CONNECTED.append((ip, port))
-					return 0, 'Connection error'
 				
 			packet = self.add_block('authentication', imei=str(row['imei']))
-			response = TCPConnections.send(ip, port, packet)
+			response = send(packet)
 			self.auth_imei[f"{ip}:{port}"] = str(row['imei'])
 		
 		packet = b''
@@ -557,7 +539,7 @@ class GalileoSky(Retranslator):
 		except Exception as e:
 			logger.error(e)
 			return 0, str(e)
-		response = TCPConnections.send(ip, port, packet)
+		response = send(packet)
 		return 1, response
 		
 	
