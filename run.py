@@ -23,3 +23,4 @@ with closing(pymysql.connect(**CONN)) as connection:
 		ret = RETRANSLATORS[RETRANSLATOR_NAMES[t['protocol']]]
 		tracker = Tracker(t['imei'], ret, t['ip'], t['port'])
 		TRACKERS.append(tracker)
+		tracker.start()

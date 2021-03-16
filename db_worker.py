@@ -10,6 +10,7 @@ from contextlib import closing
 from json import loads
 from queue import Queue
 from datetime import datetime
+from binascii import hexlify
 
 from src.retranslators import Wialon, EGTS, WialonIPS, GalileoSky, EGTSNoAuth
 from src.logs.log_config import logger
@@ -34,11 +35,12 @@ RETRANSLATORS = {
 RETRANSLATOR_IDS = {ret.lower():n for ret, n in zip(RETRANSLATORS_ALL, range(1, len(RETRANSLATORS_ALL)+1))}
 RETRANSLATOR_NAMES = {n:ret.lower() for ret, n in zip(RETRANSLATORS_ALL, range(1, len(RETRANSLATORS_ALL)+1))}
 
-class Tracker:
+class Tracker(threading.Thread):
 
-	CONN_DELAY = 1
+	CONN_DELAY = 5
 
 	def __init__(self, imei, retranslator, ip, port):
+		super().__init__()
 		self.ip = ip
 		self.port = port
 		self.imei = imei
@@ -49,11 +51,6 @@ class Tracker:
 
 		self.queue = Queue()
 		self.socket = -1
-
-		logger.info(f"START {self.retranslator.protocol_name} {self.imei} [{self.ip}:{self.port}]")
-
-		send_th = threading.Thread(target=self.sender)
-		send_th.start()
 
 	def get_settings(self):
 		query = f"SELECT `settings` FROM `retranslate_settings` WHERE `protocol`={self.retranslator_id} AND `imei`={int(self.imei)}"
@@ -68,7 +65,8 @@ class Tracker:
 
 	def connect(self):
 		sock = socket.socket()
-		sock.settimeout(1)
+		sock.settimeout(0.1)
+		sock.setblocking(0)
 		try:
 			sock.connect((self.ip, int(self.port)))
 			return sock
@@ -101,10 +99,10 @@ class Tracker:
 					self.queue.put(row)
 					notemp += 1
 			
-			if not ret:
-				logger.debug(f'Найдено {notemp} записей для {self.imei} [{self.ip}:{self.port}]\n')
+			logger.debug(f'Найдено {notemp} записей для {self.imei} [{self.ip}:{self.port}]\n')
 
-	def sender(self):
+	def run(self):
+		logger.info(f"START {self.retranslator.protocol_name} {self.imei} [{self.ip}:{self.port}]")
 		while True:
 			while self.socket==-1:
 				self.socket = self.connect()
@@ -127,7 +125,7 @@ class Tracker:
 				row['lon'] = float(row['lon'])
 				row['lat'] = float(row['lat'])
 
-			sended, status = self.retranslator.send(self.send, row, self.settings)
+			sended, status = self.retranslator.send(self.send, row, self.settings, self.ip, int(self.port))
 
 			if sended:
 				msg = "Запись ОТПРАВЛЕНА\n"
@@ -140,13 +138,13 @@ class Tracker:
 			msg += "imei".ljust(26, '-')+f"{row['imei']}\n"
 			msg += "Время точки".ljust(26, '-')+f"{datetime.fromtimestamp(row['datetime'])}\n"
 			msg += "Статус отправки".ljust(26, '-')+f"{status}\n"
-			msg += f"Записей для {self.imei}".ljust(26, '-')+f"{self.queue.qsize()}\n"
+			msg += f"Записей для {self.imei}".ljust(30, '-')+f"{self.queue.qsize()}\n"
 			
 			if not sended:
 				logger.error(msg)
 			else:
 				logger.info(msg)
-				condition = f" WHERE `ip`='{ip}' AND `port`={port} AND `imei`={row['imei']}"
+				condition = f" WHERE `ip`='{self.ip}' AND `port`={self.port} AND `imei`={row['imei']}"
 				query = f"SELECT * FROM `sent_id`" + condition
 				with self.dbconn.cursor() as cursor:
 					cursor.execute(query)
@@ -160,7 +158,7 @@ class Tracker:
 
 			self.queue.task_done()
 
-	def send(bmsg):
+	def send(self, bmsg):
 		try:
 			msglen = len(bmsg)
 
@@ -172,7 +170,7 @@ class Tracker:
 		except Exception as e:
 			self.socket.close()
 			self.socket = -1
-			logger.critical(f"Ошибка при отправке данных ({e})"+ f"\n{self.imei} [{ip}:{port}] ")
+			logger.debug(f"Ошибка при отправке данных ({e})"+ f"\n{self.imei} [{self.ip}:{self.port}] ")
 			return -1
 
 

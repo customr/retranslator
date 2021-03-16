@@ -27,7 +27,7 @@ class Wialon(Retranslator):
 		super().__init__("Wialon")
 		
 	
-	def send(self, send, row, settings):
+	def send(self, send, row, settings, ip, port):
 		self.data = {}
 		self.settings = settings
 
@@ -104,7 +104,7 @@ class EGTSNoAuth(Retranslator):
 		self.data = {"pid":0, "rid":0}
 
 
-	def send(self, send, row, settings):
+	def send(self, send, row, settings, ip, port):
 		self.settings = settings
 
 		if isinstance(row['datetime'], datetime):
@@ -230,7 +230,7 @@ class EGTS(Retranslator):
 		self.auth_imei = {}
 
 
-	def send(self, send, row, settings):
+	def send(self, send, row, settings, ip, port):
 		self.settings = settings
 
 		if isinstance(row['datetime'], datetime):
@@ -388,7 +388,7 @@ class WialonIPS(Retranslator):
 		self.auth_imei = {}
 
 
-	def send(self, send, row, settings):
+	def send(self, send, row, settings, ip, port):
 		self.data = {}
 		self.settings = settings
 
@@ -517,7 +517,7 @@ class GalileoSky(Retranslator):
 		self.auth_imei = {}
 	
 
-	def send(self, send, row, settings):
+	def send(self, send, row, settings, ip, port):
 		self.data = {}
 		self.settings = settings
 
